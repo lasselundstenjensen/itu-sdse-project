@@ -1,10 +1,14 @@
-# /raw_data.csv
+# Ignore all CSV data files
+*.csv
 
-# Ignore data & models 
+# But keep DVC pointer files (.csv.dvc)
+!*.csv.dvc
+
+# Ignore data & models directories (actual data only)
 data/
 models/
 
-# keep DVC tracking files
+# Keep DVC tracking files
 !data/**/*.dvc
 !models/**/*.dvc
 !.dvcignore
