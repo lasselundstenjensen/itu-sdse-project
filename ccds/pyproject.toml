@@ -1,0 +1,33 @@
+[build-system]
+requires = ["flit_core >=3.2,<4"]
+build-backend = "flit_core.buildapi"
+
+[project]
+name = "itu_sdse_project"
+version = "0.0.1"
+description = "refactoring and deployment project"
+authors = [
+  { name = "rawdocker" },
+]
+license = { file = "LICENSE" }
+readme = "README.md"
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "License :: OSI Approved :: MIT License"
+]
+# requires-python = "~=3.10.0"
+requires-python = ">=3.10,<3.13" # accepts newer python
+
+
+[tool.ruff]
+line-length = 99
+src = ["itu_sdse_project"]
+include = ["pyproject.toml", "itu_sdse_project/**/*.py"]
+
+[tool.ruff.lint]
+extend-select = ["I"]  # Add import sorting
+
+[tool.ruff.lint.isort]
+known-first-party = ["itu_sdse_project"]
+force-sort-within-sections = true
+
