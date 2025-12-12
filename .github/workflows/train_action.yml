@@ -1,0 +1,31 @@
+name: Train / Test Model
+
+on:
+  pull_request:
+    branches: [ "main" ]
+
+jobs:
+  build-and-validate:
+    name: Build, Train, and Validate
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Setup Go (for Dagger)
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.24'
+
+      - name: Run Dagger Pipeline
+        run: go run dagger/main.go
+
+      - name: Upload Model Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: model
+          path: lead_model_xgboost.pkl
+
+      - name: Run Model Validator
+        uses: lasselundstenjensen/itu-sdse-project-model-validator@main
