@@ -16,11 +16,11 @@ from paths import (
 )
 
 
-def _numeric_summary(series: pd.Series) -> pd.Series:
+def _numeric_summary(series):
     return pd.Series(
         [
             series.count(),
-            series.isnull().sum(),
+            series.isna().sum()
             series.mean(),
             series.min(),
             series.max(),
@@ -29,9 +29,9 @@ def _numeric_summary(series: pd.Series) -> pd.Series:
     )
 
 
-def clean_base_data(df: pd.DataFrame) -> pd.DataFrame:
+def clean_base_data(df):
     df = df.copy()
-    drop_cols = [
+    df = df.drop(columns=[
         "is_active",
         "marketing_consent",
         "first_booking",
@@ -41,18 +41,18 @@ def clean_base_data(df: pd.DataFrame) -> pd.DataFrame:
         "country",
         "visited_learn_more_before_booking",
         "visited_faq",
-    ]
-    df = df.drop(columns=drop_cols)
+    ])
 
-    for col in ["lead_indicator", "lead_id", "customer_code"]:
-        df[col].replace("", np.nan, inplace=True)
+    cols = ["lead_indicator", "lead_id", "customer_code"]
+    df[cols] = df[cols].replace("", np.nan)
 
     df = df.dropna(subset=["lead_indicator", "lead_id"])
     df = df[df.source == "signup"]
     return df
 
 
-def split_feature_types(df: pd.DataFrame):
+def split_feature_types(df):
+    df = df.copy()
     categorical_cols = [
         "lead_id",
         "lead_indicator",
@@ -63,45 +63,47 @@ def split_feature_types(df: pd.DataFrame):
     ]
     df[categorical_cols] = df[categorical_cols].astype("object")
 
-    continuous = df.select_dtypes(include=["float64", "int64"])
+    continuous = df.select_dtypes(include="number")
     categorical = df.select_dtypes(include=["object"])
 
     return categorical, continuous
 
 
-def cap_outliers(continuous: pd.DataFrame) -> pd.DataFrame:
-    capped = continuous.apply(
-        lambda x: x.clip(
-            lower=x.mean() - 2 * x.std(),
-            upper=x.mean() + 2 * x.std(),
-        )
-    )
+def cap_outliers(continuous):
+    def cap_series(x):
+        mean = x.mean()
+        std = x.std()
+        return x.clip(mean - n_std * std, mean + n_std * std)
+
+    capped = continuous.apply(cap_series)
+
     capped.apply(_numeric_summary).T.to_csv(
         OUTLIER_SUMMARY_FILE, index=False
     )
     return capped
 
 
-def impute_features(
-    categorical: pd.DataFrame,
-    continuous: pd.DataFrame,
-):
+def impute_features(categorical, continuous):
+    categorical = categorical.copy()
+    continuous = continuous.copy()
+
     categorical.mode(dropna=True).to_csv(
         CAT_MISSING_IMPUTE_FILE, index=False
     )
 
     continuous = continuous.apply(impute_series)
 
-    categorical.loc[
-        categorical["customer_code"].isna(),
-        "customer_code",
-    ] = "None"
+    categorical["customer_code"] = (
+    categorical["customer_code"].fillna("None")
+)
     categorical = categorical.apply(impute_series)
 
     return categorical, continuous
 
 
-def scale_continuous_features(continuous: pd.DataFrame) -> pd.DataFrame:
+def scale_continuous_features(continuous):
+    continuous = continuous.copy()
+
     scaler = MinMaxScaler()
     scaler.fit(continuous)
     joblib.dump(scaler, SCALER_FILE)
@@ -112,10 +114,10 @@ def scale_continuous_features(continuous: pd.DataFrame) -> pd.DataFrame:
     )
 
 
-def combine_and_record_columns(
-    categorical: pd.DataFrame,
-    continuous: pd.DataFrame,
-) -> pd.DataFrame:
+def combine_and_record_columns(categorical, continuous):
+    categorical = categorical.copy()
+    continuous = continuous.copy()
+
     data = pd.concat(
         [
             categorical.reset_index(drop=True),
@@ -131,8 +133,9 @@ def combine_and_record_columns(
     return data
 
 
-def bin_source_feature(df: pd.DataFrame) -> pd.DataFrame:
+def bin_source_feature(df):
     df = df.copy()
+
     mapping = {
         "li": "socials",
         "fb": "socials",
@@ -143,7 +146,9 @@ def bin_source_feature(df: pd.DataFrame) -> pd.DataFrame:
     return df
 
 
-def run_feature_engineering(df: pd.DataFrame) -> pd.DataFrame:
+def run_feature_engineering(df): 
+    df = df.copy()
+    
     df = clean_base_data(df)
     categorical, continuous = split_feature_types(df)
     continuous = cap_outliers(continuous)
