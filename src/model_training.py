@@ -10,17 +10,20 @@ from sklearn.linear_model import LogisticRegression
 from scipy.stats import uniform, randint
 from xgboost import XGBRFClassifier
 
-from paths import (
-    TRAIN_GOLD_FILE,
-    XGBOOST_MODEL_FILE,
-    LR_MODEL_FILE,
-    X_TEST_FILE,
-    Y_TEST_FILE,
-)
-from model_adapters import LogisticRegressionAdapter
+
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
+ARTIFACTS_DIR = PROJECT_ROOT / "artifacts"
+
+TRAINING_GOLD_DATA_FILE = ARTIFACTS_DIR / "training_data_gold.csv"
+XGBOOST_MODEL_FILE = ARTIFACTS_DIR / "xgboost_model.json"
+LOGISTIC_REGRESSION_MODEL_FILE = ARTIFACTS_DIR / "logistic_regression_model.pkl"
+X_TEST_FILE = ARTIFACTS_DIR / "X_test.csv"
+Y_TEST_FILE = ARTIFACTS_DIR / "y_test.csv"
 
 
-def encode_categoricals(df: pd.DataFrame) -> pd.DataFrame:
+def encode_categoricals(df):
+    df = df.copy()
+
     df = df.drop(["lead_id", "customer_code", "date_part"], axis=1)
     categorical = ["customer_group", "onboarding", "bin_source", "source"]
 
@@ -28,6 +31,17 @@ def encode_categoricals(df: pd.DataFrame) -> pd.DataFrame:
         df = pd.get_dummies(df, columns=[col], drop_first=True)
 
     return df.astype("float64")
+
+
+class LogisticRegressionAdapter(mlflow.pyfunc.PythonModel):
+
+    def __init__(self, trained_model):
+        self._model = trained_model
+
+    def predict(self, context, model_input):
+        return self._model.predict_proba(model_input)[:, 1]
+
+
 
 
 def train_single_model(
@@ -38,10 +52,10 @@ def train_single_model(
     model_path: Path,
     autolog_module: str,
 ):
-    # Enable MLflow autologging (without auto model save)
     getattr(mlflow, autolog_module).autolog(log_models=False)
 
     model = model_cls(random_state=42)
+
     search = RandomizedSearchCV(
         model,
         params,
@@ -54,11 +68,9 @@ def train_single_model(
     search.fit(X_train, y_train)
     best = search.best_estimator_
 
-    # Save model correctly (sklearn-compatible)
     joblib.dump(best, model_path)
     mlflow.log_artifact(model_path)
 
-    # Optional: log LR as pyfunc
     if isinstance(best, LogisticRegression):
         mlflow.pyfunc.log_model(
             artifact_path="model",
@@ -67,7 +79,7 @@ def train_single_model(
 
 
 def main():
-    data = pd.read_csv(TRAIN_GOLD_FILE)
+    data = pd.read_csv(TRAINING_GOLD_DATA_FILE)
     data = encode_categoricals(data)
 
     y = data["lead_indicator"]
@@ -116,7 +128,7 @@ def main():
             param_lr,
             X_train,
             y_train,
-            LR_MODEL_FILE,
+            LOGISTIC_REGRESSION_MODEL_FILE,
             "sklearn",
         )
 

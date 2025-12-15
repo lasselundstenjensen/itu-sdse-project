@@ -2,25 +2,28 @@ import json
 import joblib
 import numpy as np
 import pandas as pd
+from pathlib import Path
 from sklearn.preprocessing import MinMaxScaler
 
-from data_imputation import impute_series
-from paths import (
-    DATE_FILTERED_DATA_FILE,
-    OUTLIER_SUMMARY_FILE,
-    CAT_MISSING_IMPUTE_FILE,
-    SCALER_FILE,
-    COLUMNS_DRIFT_FILE,
-    TRAINING_DATA_FILE,
-    TRAIN_GOLD_FILE,
-)
+
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
+ARTIFACTS_DIR = PROJECT_ROOT / "artifacts"
+
+FILTERED_BY_DATE_FILE = ARTIFACTS_DIR / "data_filtered_by_date.csv"
+OUTLIER_SUMMARY_FILE = ARTIFACTS_DIR / "outlier_summary.csv"
+CATEGORICAL_IMPUTATION_FILE = ARTIFACTS_DIR / "categorical_imputation_values.csv"
+FEATURE_SCALER_FILE = ARTIFACTS_DIR / "feature_scaler.pkl"
+FEATURE_COLUMNS_FILE = ARTIFACTS_DIR / "feature_columns.json"
+MODEL_TRAINING_DATA_FILE = ARTIFACTS_DIR / "model_training_data.csv"
+TRAINING_GOLD_DATA_FILE = ARTIFACTS_DIR / "training_data_gold.csv"
+
 
 
 def _numeric_summary(series):
     return pd.Series(
         [
             series.count(),
-            series.isna().sum()
+            series.isna().sum(),
             series.mean(),
             series.min(),
             series.max(),
@@ -69,7 +72,7 @@ def split_feature_types(df):
     return categorical, continuous
 
 
-def cap_outliers(continuous):
+def cap_outliers(continuous, n_std=2):
     def cap_series(x):
         mean = x.mean()
         std = x.std()
@@ -82,13 +85,22 @@ def cap_outliers(continuous):
     )
     return capped
 
+def impute_series(series, numeric_strategy="mean"):
+
+    if series.dtype in ("float64", "int64"):
+        if numeric_strategy == "median":
+            return series.fillna(series.median())
+        return series.fillna(series.mean())
+
+    return series.fillna(series.mode().iloc[0])
+
 
 def impute_features(categorical, continuous):
     categorical = categorical.copy()
     continuous = continuous.copy()
 
     categorical.mode(dropna=True).to_csv(
-        CAT_MISSING_IMPUTE_FILE, index=False
+        CATEGORICAL_IMPUTATION_FILE, index=False
     )
 
     continuous = continuous.apply(impute_series)
@@ -106,7 +118,7 @@ def scale_continuous_features(continuous):
 
     scaler = MinMaxScaler()
     scaler.fit(continuous)
-    joblib.dump(scaler, SCALER_FILE)
+    joblib.dump(scaler, FEATURE_SCALER_FILE)
 
     return pd.DataFrame(
         scaler.transform(continuous),
@@ -126,10 +138,10 @@ def combine_and_record_columns(categorical, continuous):
         axis=1,
     )
 
-    with open(COLUMNS_DRIFT_FILE, "w") as f:
+    with open(FEATURE_COLUMNS_FILE, "w") as f:
         json.dump(list(data.columns), f)
 
-    data.to_csv(TRAINING_DATA_FILE, index=False)
+    data.to_csv(MODEL_TRAINING_DATA_FILE, index=False)
     return data
 
 
@@ -157,10 +169,10 @@ def run_feature_engineering(df):
     combined = combine_and_record_columns(categorical, continuous)
     final = bin_source_feature(combined)
 
-    final.to_csv(TRAIN_GOLD_FILE, index=False)
+    final.to_csv(TRAINING_GOLD_DATA_FILE, index=False)
     return final
 
 
 if __name__ == "__main__":
-    raw = pd.read_csv(DATE_FILTERED_DATA_FILE)
+    raw = pd.read_csv(FILTERED_BY_DATE_FILE)
     run_feature_engineering(raw)

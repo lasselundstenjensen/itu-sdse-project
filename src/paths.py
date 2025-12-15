@@ -16,6 +16,7 @@ TRAIN_GOLD_FILE = ARTIFACTS_DIR / "train_data_gold.csv"
 X_TEST_FILE = ARTIFACTS_DIR / "X_test.csv"
 Y_TEST_FILE = ARTIFACTS_DIR / "y_test.csv"
 
+DATE_METADATA_FILE = ARTIFACTS_DIR / "date_limits.json"
 DATE_LIMITS_FILE = ARTIFACTS_DIR / "date_limits.json"
 OUTLIER_SUMMARY_FILE = ARTIFACTS_DIR / "outlier_summary.csv"
 CAT_MISSING_IMPUTE_FILE = ARTIFACTS_DIR / "cat_missing_impute.csv"
