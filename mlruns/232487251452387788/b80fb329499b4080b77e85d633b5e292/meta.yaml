@@ -1,0 +1,15 @@
+artifact_uri: file:///repo/notebooks/mlruns/232487251452387788/b80fb329499b4080b77e85d633b5e292/artifacts
+end_time: 1765399721939
+entry_point_name: ''
+experiment_id: '232487251452387788'
+lifecycle_stage: active
+run_id: b80fb329499b4080b77e85d633b5e292
+run_name: unique-carp-215
+run_uuid: b80fb329499b4080b77e85d633b5e292
+source_name: ''
+source_type: 4
+source_version: ''
+start_time: 1765399713732
+status: 3
+tags: []
+user_id: root

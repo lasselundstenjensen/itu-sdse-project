@@ -1,0 +1,15 @@
+artifact_uri: file:///workspace/mlruns/380419669144225929/9d6815a6aed343f194032efccae06ec0/artifacts
+end_time: 1765378407820
+entry_point_name: ''
+experiment_id: '380419669144225929'
+lifecycle_stage: active
+run_id: 9d6815a6aed343f194032efccae06ec0
+run_name: thoughtful-stoat-104
+run_uuid: 9d6815a6aed343f194032efccae06ec0
+source_name: ''
+source_type: 4
+source_version: ''
+start_time: 1765378406179
+status: 3
+tags: []
+user_id: root

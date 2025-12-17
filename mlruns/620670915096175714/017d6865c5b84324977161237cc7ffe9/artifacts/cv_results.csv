@@ -1,0 +1,11 @@
+mean_fit_time,std_fit_time,mean_score_time,std_score_time,param_solver,param_penalty,param_C,params,split0_test_score,split1_test_score,split2_test_score,mean_test_score,std_test_score,rank_test_score
+0.010071833928426107,0.0022293232172943536,0.0,0.0,sag,none,100.0,"{'solver': 'sag', 'penalty': 'none', 'C': 100}",,,,,,3
+0.0102996826171875,0.00021918081614111435,0.0,0.0,newton-cg,none,0.01,"{'solver': 'newton-cg', 'penalty': 'none', 'C': 0.01}",,,,,,3
+0.06509518623352051,0.011723873760445456,0.012958923975626627,0.0007853340635978646,lbfgs,l2,10.0,"{'solver': 'lbfgs', 'penalty': 'l2', 'C': 10}",0.8185096153846154,0.8040865384615384,0.8112980769230769,0.811298076923077,0.0058881964970749715,1
+0.007628520329793294,0.0007479032951504399,0.0,0.0,saga,none,10.0,"{'solver': 'saga', 'penalty': 'none', 'C': 10}",,,,,,3
+0.008540789286295572,0.0011361665942267911,0.0,0.0,liblinear,none,0.1,"{'solver': 'liblinear', 'penalty': 'none', 'C': 0.1}",,,,,,3
+0.07205263773600261,0.007672595896716336,0.012286822001139322,0.0018654601196905652,newton-cg,l2,1.0,"{'solver': 'newton-cg', 'penalty': 'l2', 'C': 1.0}",0.8197115384615384,0.8004807692307693,0.8125,0.8108974358974358,0.007932287609464447,2
+0.007063070933024089,0.00037849790250061064,0.0,0.0,liblinear,elasticnet,1.0,"{'solver': 'liblinear', 'penalty': 'elasticnet', 'C': 1.0}",,,,,,3
+0.006509701410929362,0.0016075039119596726,0.0,0.0,sag,elasticnet,1.0,"{'solver': 'sag', 'penalty': 'elasticnet', 'C': 1.0}",,,,,,3
+0.00630942980448405,0.0006308698668571301,0.0,0.0,lbfgs,elasticnet,1.0,"{'solver': 'lbfgs', 'penalty': 'elasticnet', 'C': 1.0}",,,,,,3
+0.006402651468912761,0.0010163443205919592,0.0,0.0,lbfgs,none,0.01,"{'solver': 'lbfgs', 'penalty': 'none', 'C': 0.01}",,,,,,3

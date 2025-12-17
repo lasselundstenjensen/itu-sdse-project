@@ -1,0 +1,15 @@
+artifact_uri: file:///workspace/mlruns/929780322834052538/9764aed5855343f1ac4f2a74b9886db6/artifacts
+end_time: 1765330784350
+entry_point_name: ''
+experiment_id: '929780322834052538'
+lifecycle_stage: active
+run_id: 9764aed5855343f1ac4f2a74b9886db6
+run_name: upset-sponge-803
+run_uuid: 9764aed5855343f1ac4f2a74b9886db6
+source_name: ''
+source_type: 4
+source_version: ''
+start_time: 1765330781237
+status: 3
+tags: []
+user_id: root

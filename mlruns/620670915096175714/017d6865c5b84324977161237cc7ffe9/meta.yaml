@@ -1,0 +1,15 @@
+artifact_uri: file:///C:/Users/andre/Downloads/itu-sdse-project-RGOFV/mlruns/620670915096175714/017d6865c5b84324977161237cc7ffe9/artifacts
+end_time: 1765466187031
+entry_point_name: ''
+experiment_id: '620670915096175714'
+lifecycle_stage: active
+run_id: 017d6865c5b84324977161237cc7ffe9
+run_name: legendary-moth-40
+run_uuid: 017d6865c5b84324977161237cc7ffe9
+source_name: ''
+source_type: 4
+source_version: ''
+start_time: 1765466127815
+status: 3
+tags: []
+user_id: andre

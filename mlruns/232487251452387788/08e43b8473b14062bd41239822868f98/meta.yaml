@@ -1,0 +1,15 @@
+artifact_uri: file:///repo/notebooks/mlruns/232487251452387788/08e43b8473b14062bd41239822868f98/artifacts
+end_time: 1765399721939
+entry_point_name: ''
+experiment_id: '232487251452387788'
+lifecycle_stage: active
+run_id: 08e43b8473b14062bd41239822868f98
+run_name: omniscient-rook-258
+run_uuid: 08e43b8473b14062bd41239822868f98
+source_name: ''
+source_type: 4
+source_version: ''
+start_time: 1765399713732
+status: 3
+tags: []
+user_id: root

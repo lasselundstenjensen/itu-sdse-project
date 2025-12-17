@@ -1,0 +1,15 @@
+artifact_uri: file:///workspace/mlruns/165165460387153286/2549a52093d6419aa70062231ca79b6a/artifacts
+end_time: 1765385519510
+entry_point_name: ''
+experiment_id: '165165460387153286'
+lifecycle_stage: active
+run_id: 2549a52093d6419aa70062231ca79b6a
+run_name: fortunate-fawn-703
+run_uuid: 2549a52093d6419aa70062231ca79b6a
+source_name: ''
+source_type: 4
+source_version: ''
+start_time: 1765385517678
+status: 3
+tags: []
+user_id: root

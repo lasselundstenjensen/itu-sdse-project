@@ -1,0 +1,15 @@
+artifact_uri: file:///workspace/mlruns/165165460387153286/940d551467304d878844e8ed05550bb9/artifacts
+end_time: 1765385519510
+entry_point_name: ''
+experiment_id: '165165460387153286'
+lifecycle_stage: active
+run_id: 940d551467304d878844e8ed05550bb9
+run_name: gregarious-ant-319
+run_uuid: 940d551467304d878844e8ed05550bb9
+source_name: ''
+source_type: 4
+source_version: ''
+start_time: 1765385517678
+status: 3
+tags: []
+user_id: root

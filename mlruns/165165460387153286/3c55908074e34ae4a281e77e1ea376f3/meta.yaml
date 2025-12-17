@@ -1,0 +1,15 @@
+artifact_uri: file:///workspace/mlruns/165165460387153286/3c55908074e34ae4a281e77e1ea376f3/artifacts
+end_time: 1765385519510
+entry_point_name: ''
+experiment_id: '165165460387153286'
+lifecycle_stage: active
+run_id: 3c55908074e34ae4a281e77e1ea376f3
+run_name: exultant-turtle-715
+run_uuid: 3c55908074e34ae4a281e77e1ea376f3
+source_name: ''
+source_type: 4
+source_version: ''
+start_time: 1765385517678
+status: 3
+tags: []
+user_id: root

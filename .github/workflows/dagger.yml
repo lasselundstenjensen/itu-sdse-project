@@ -1,0 +1,81 @@
+
+name: Run Dagger Pipeline
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+      - workflow-fix
+      - dagger
+      - cookiecutter02
+
+jobs:
+  train:
+    name: Train model with Dagger
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.25.4'
+          cache: false
+
+      - name: Install Dagger CLI
+        run: |
+          curl -fsSL https://dl.dagger.io/dagger/install.sh | sh
+          sudo mv ./bin/dagger /usr/local/bin/dagger
+          dagger version
+
+      - name: Run training pipeline
+        run: dagger run go run ./pipeline.go
+
+      - name: Rename model
+        run: |
+          ls -al models || true
+          test -f models/model.pkl || (echo "Model not found: models/model.pkl" && exit 1)
+          #cp models/lead_model_logreg.pkl models/model.pkl
+          #ls -al models
+
+      - name: Validate model presence
+        run: |
+          ls -al models || true
+          test -f models/model.pkl || (echo "Model not found: models/model.pkl" && exit 1)
+
+      - name: Upload Trained Model Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: model
+          path: models/model.pkl
+
+  test:
+    name: Validate trained model
+    needs: train
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.12'
+
+      - name: Install Dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt        
+
+      - name: Download model artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: model
+          path: ./model
+        #Needs xgboost still?
+      - name: Run Model Inference Test Action
+        uses: lasselundstenjensen/itu-sdse-project-model-validator@main

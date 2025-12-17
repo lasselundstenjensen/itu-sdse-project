@@ -1,0 +1,15 @@
+artifact_uri: file:///workspace/mlruns/380419669144225929/4a2598a971f74f85968d0e0cfdc762c5/artifacts
+end_time: 1765378407820
+entry_point_name: ''
+experiment_id: '380419669144225929'
+lifecycle_stage: active
+run_id: 4a2598a971f74f85968d0e0cfdc762c5
+run_name: adventurous-crane-71
+run_uuid: 4a2598a971f74f85968d0e0cfdc762c5
+source_name: ''
+source_type: 4
+source_version: ''
+start_time: 1765378406179
+status: 3
+tags: []
+user_id: root

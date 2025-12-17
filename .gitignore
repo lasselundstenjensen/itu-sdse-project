@@ -1,0 +1,28 @@
+# MacOS
+.DS_Store
+
+# Python
+__pycache__/
+*.pyc
+.ipynb_checkpoints/
+.venv/
+env/
+venv/
+*.egg-info/
+
+# IDEs
+.vscode/
+.idea/
+
+# Data & Models (Tracked by DVC or generated)
+*.joblib
+*.pkl
+# artifacts/*.csv
+!artifacts/*.dvc
+mlruns/
+
+# Go
+ci/vendor/
+ci/bin/
+go.work
+go.work.sum

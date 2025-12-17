@@ -1,0 +1,51 @@
+[build-system]
+requires = ["flit_core >=3.2,<4"]
+build-backend = "flit_core.buildapi"
+
+[project]
+name = "mlops_pipeline"
+version = "0.0.4"
+description = "Cookiecutter Pipeline for the Autumn 2025 MLOps group exam project."
+authors = [
+  { name = "RGoFV" },
+]
+
+readme = "README.md"
+classifiers = [
+    "Programming Language :: Python :: 3",
+    
+]
+requires-python = ">=3.10"
+
+dependencies = [
+    "scikit-learn==1.5.2",
+    "pandas==2.2.3",
+    "mlflow==2.18.0",
+    "xgboost==2.1.1",
+    "dvc==3.64.0",
+    "loguru",
+    "mkdocs",
+    "python-dotenv",
+    "ruff",
+    "tqdm",
+    "typer"
+]
+
+
+[project.scripts]
+mlops = "mlops_pipeline.cli.app:app"
+
+
+
+[tool.ruff]
+line-length = 99
+src = ["mlops_pipeline"]
+include = ["pyproject.toml", "mlops_pipeline/**/*.py"]
+
+[tool.ruff.lint]
+extend-select = ["I"]  # Add import sorting
+
+[tool.ruff.lint.isort]
+known-first-party = ["mlops_pipeline"]
+force-sort-within-sections = true
+

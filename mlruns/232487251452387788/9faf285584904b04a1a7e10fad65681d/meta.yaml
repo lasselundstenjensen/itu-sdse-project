@@ -1,0 +1,15 @@
+artifact_uri: file:///repo/notebooks/mlruns/232487251452387788/9faf285584904b04a1a7e10fad65681d/artifacts
+end_time: 1765399839946
+entry_point_name: ''
+experiment_id: '232487251452387788'
+lifecycle_stage: active
+run_id: 9faf285584904b04a1a7e10fad65681d
+run_name: learned-bug-914
+run_uuid: 9faf285584904b04a1a7e10fad65681d
+source_name: ''
+source_type: 4
+source_version: ''
+start_time: 1765399713732
+status: 3
+tags: []
+user_id: root

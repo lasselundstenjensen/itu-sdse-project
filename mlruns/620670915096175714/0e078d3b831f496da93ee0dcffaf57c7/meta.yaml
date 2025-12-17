@@ -1,0 +1,15 @@
+artifact_uri: file:///C:/Users/andre/Downloads/itu-sdse-project-RGOFV/mlruns/620670915096175714/0e078d3b831f496da93ee0dcffaf57c7/artifacts
+end_time: 1765466136513
+entry_point_name: ''
+experiment_id: '620670915096175714'
+lifecycle_stage: active
+run_id: 0e078d3b831f496da93ee0dcffaf57c7
+run_name: bouncy-lamb-330
+run_uuid: 0e078d3b831f496da93ee0dcffaf57c7
+source_name: ''
+source_type: 4
+source_version: ''
+start_time: 1765466127815
+status: 3
+tags: []
+user_id: andre

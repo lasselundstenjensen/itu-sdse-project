@@ -1,0 +1,4 @@
+[core]
+    remote = github
+['remote "github"']
+    url = https://github.com/Jeppe-T-K/itu-sdse-project-data

@@ -1,0 +1,15 @@
+artifact_uri: file:///workspace/mlruns/380419669144225929/17adfe3edb6c45639e01f0a6ab779451/artifacts
+end_time: 1765378416060
+entry_point_name: ''
+experiment_id: '380419669144225929'
+lifecycle_stage: active
+run_id: 17adfe3edb6c45639e01f0a6ab779451
+run_name: welcoming-fly-390
+run_uuid: 17adfe3edb6c45639e01f0a6ab779451
+source_name: ''
+source_type: 4
+source_version: ''
+start_time: 1765378406179
+status: 3
+tags: []
+user_id: root

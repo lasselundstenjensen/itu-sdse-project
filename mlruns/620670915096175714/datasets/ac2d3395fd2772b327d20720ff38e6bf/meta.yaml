@@ -1,0 +1,16 @@
+digest: 787c0607
+name: dataset
+profile: '{"num_rows": 2496, "num_elements": 29952}'
+schema: '{"mlflow_colspec": [{"type": "double", "name": "purchases", "required": true},
+  {"type": "double", "name": "time_spent", "required": true}, {"type": "double", "name":
+  "n_visits", "required": true}, {"type": "double", "name": "customer_group_2", "required":
+  true}, {"type": "double", "name": "customer_group_3", "required": true}, {"type":
+  "double", "name": "customer_group_4", "required": true}, {"type": "double", "name":
+  "customer_group_5", "required": true}, {"type": "double", "name": "customer_group_6",
+  "required": true}, {"type": "double", "name": "customer_group_7", "required": true},
+  {"type": "double", "name": "customer_group_8", "required": true}, {"type": "double",
+  "name": "customer_group_9", "required": true}, {"type": "double", "name": "onboarding_True",
+  "required": true}]}'
+source: '{"tags": {"mlflow.user": "andre", "mlflow.source.name": "notebooks/02_model.py",
+  "mlflow.source.type": "LOCAL", "mlflow.source.git.commit": "7bd90e66cdf549081cc10c528031114164e173fd"}}'
+source_type: code

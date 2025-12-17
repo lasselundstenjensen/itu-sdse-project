@@ -1,0 +1,15 @@
+artifact_uri: file:///workspace/mlruns/929780322834052538/ef52543f15d04a85bb06e3d36096d32f/artifacts
+end_time: 1765330784350
+entry_point_name: ''
+experiment_id: '929780322834052538'
+lifecycle_stage: active
+run_id: ef52543f15d04a85bb06e3d36096d32f
+run_name: efficient-boar-672
+run_uuid: ef52543f15d04a85bb06e3d36096d32f
+source_name: ''
+source_type: 4
+source_version: ''
+start_time: 1765330781237
+status: 3
+tags: []
+user_id: root

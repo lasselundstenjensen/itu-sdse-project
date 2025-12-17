@@ -1,0 +1,14 @@
+aliases: []
+creation_timestamp: 1765466188626
+current_stage: None
+description: null
+last_updated_timestamp: 1765466188626
+name: lead_model
+run_id: 017d6865c5b84324977161237cc7ffe9
+run_link: null
+source: file:///C:/Users/andre/Downloads/itu-sdse-project-RGOFV/mlruns/620670915096175714/017d6865c5b84324977161237cc7ffe9/artifacts/model
+status: READY
+status_message: null
+storage_location: file:///C:/Users/andre/Downloads/itu-sdse-project-RGOFV/mlruns/620670915096175714/017d6865c5b84324977161237cc7ffe9/artifacts/model
+user_id: null
+version: 2

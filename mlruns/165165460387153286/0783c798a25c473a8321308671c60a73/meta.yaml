@@ -1,0 +1,15 @@
+artifact_uri: file:///workspace/mlruns/165165460387153286/0783c798a25c473a8321308671c60a73/artifacts
+end_time: 1765385537051
+entry_point_name: ''
+experiment_id: '165165460387153286'
+lifecycle_stage: active
+run_id: 0783c798a25c473a8321308671c60a73
+run_name: flawless-toad-1000
+run_uuid: 0783c798a25c473a8321308671c60a73
+source_name: ''
+source_type: 4
+source_version: ''
+start_time: 1765385517678
+status: 3
+tags: []
+user_id: root

@@ -1,0 +1,4 @@
+/raw_data.csv
+
+# .dvcignore
+**/Library/Application Support/Code/User/History/**
