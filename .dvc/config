@@ -1,4 +1,4 @@
 [core]
-    remote = github
-['remote "github"']
+    remote = dvc_data3
+['remote "dvc_data3"']
     url = https://github.com/Jeppe-T-K/itu-sdse-project-data

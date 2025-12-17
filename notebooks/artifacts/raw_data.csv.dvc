@@ -9,5 +9,6 @@ deps:
 outs:
 - md5: 05663184eaf8f324162e4d1bc14be387
   size: 1358284
+  isexec: true
   hash: md5
   path: raw_data.csv

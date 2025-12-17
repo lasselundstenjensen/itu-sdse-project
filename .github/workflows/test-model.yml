@@ -1,0 +1,24 @@
+name: Test Model
+
+on:
+  workflow_run:
+    workflows: ["Train Model"]
+    types:
+      - completed
+  workflow_dispatch: # Manuel triggering
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    if: ${{ github.event.workflow_run.conclusion == 'success' || github.event_name == 'workflow_dispatch' }}
+
+    steps:
+      - name: Download model artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: model
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          run-id: ${{ github.event.workflow_run.id }}
+
+      - name: Run Model Inference Test
+        uses: lasselundstenjensen/itu-sdse-project-model-validator@main
