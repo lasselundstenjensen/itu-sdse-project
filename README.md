@@ -1,4 +1,4 @@
-# ITU BDS MLOPS'25 - Project
+# ITU BDS MLOPS'26 - Project (V2)
 
 ## Task
 
