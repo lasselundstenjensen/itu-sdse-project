@@ -41,7 +41,21 @@ Schemas live under `platform/registry/schemas/` (JSON Schema) so both the event 
 - **Metrics displayed:** current status, uptime % over configurable window, correctness % over configurable window, timestamp of last probe, timestamp of last failure, count of successful recovery events (drift detected → new model version deployed and healthy again).
 - Single-page application. No auth needed to view; auth only required to mutate (see access control).
 
-**Visual reference.** Per-model row feels like the Claude Status page: model name on the left, a horizontal strip of small coloured bars (one per recent probe), aggregate % in the middle, current status label on the right. Two overlaid tracks per model (reachability + correctness) or two adjacent strips — decide during design.
+**Visual reference — replicate this.** See [`docs/dashboard-reference.png`](docs/dashboard-reference.png) (Anthropic status page). Per-model row is:
+
+- **Left:** bold model title (team name · model display_name).
+- **Right:** status label in green when healthy — `Operational` on the reference — set from the most recent probe.
+- **Middle (full-width bar strip):** ~90 thin vertical bars, one per recent probe, oldest on the left, newest on the right. Bar colour is the probe outcome: green = reachable & correct, amber = reachable but incorrect (drift-suspected), red = unreachable. Small gap between bars; strip fills the row.
+- **Under the strip:** three-column footer — left `N probes ago`, centre `<pct> % uptime` (or correctness — see below) between two thin horizontal rules, right `Today`.
+- **Page header (top-right, once per page):** small muted line `Uptime over the last N probes.` No historical link needed in v1.
+
+**Palette (light theme, paper background).** Bars: green `#7CB342`, amber `#F2B01E`, red `#E5484D` on a warm off-white page (`#FAFAF7`). Row separators are thin `#E5E5E0` rules. Title is near-black; the "Operational" label uses the same green as healthy bars. Font: system UI stack (matches the reference).
+
+**Reachability + correctness — decision.** Use a **single strip per model, with three-colour semantics** (green / amber / red as above) rather than two tracks. This matches the reference visually and keeps rows compact. The two indicators are still stored independently in the Status DB; the SPA collapses them at render time.
+
+**Aggregate metric.** Display **correctness %** as the centre-footer number (not raw uptime) — that's what the exam actually grades. Label it `<pct> % correctness` to be honest about which of the two indicators it is. Uptime %, last-probe time, last-failure time, and recovery count live in a hover tooltip or an expanded detail view, not in the compact row.
+
+**Compact-row layout — no more than this.** Nothing per-row beyond title, strip, status label, and the three-column footer. Endpoint URL, ready-for-events toggle, and any admin controls belong on a per-model detail page or dialog reached by clicking the row — the leaderboard grid stays scan-friendly.
 </important>
 
 <important if="you are working on team auth, the admin SPA (platform/admin/**), or per-model write permissions">
@@ -98,6 +112,7 @@ Minimum operations:
 
 ## Working conventions
 
+- **Absolute simplicity is the design brief.** This is a grading harness for a course, not a product. Prefer the boring choice every time: plain functions over classes, one file over three, standard library over a dependency, a single process over two, direct calls over indirection. Don't add abstractions for future flexibility that isn't asked for. Don't build config knobs for cases we don't have. Don't design for scale we won't hit. If a piece of the design isn't earning its keep against the four tooling components as they exist today, cut it. The repository interface exists because `CLAUDE.md` names it as a swap point — that is the *only* pre-emptive abstraction; everywhere else, write the shortest thing that works.
 - Student-facing files (`README.md`, `notebooks/**`, `action.yml`, `.github/workflows/**` that ship to students, `docs/project-architecture.png`) are read-only for v2 tooling work unless the change is explicitly a student-facing improvement.
 - v2 lecturer tooling lives under `platform/`:
   - `platform/registry/` — shared repository interface + file-backed implementation.
