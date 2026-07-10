@@ -1,0 +1,653 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ITU SDSE v2 — Lecturer Tooling Plan</title>
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+<style>
+  :root {
+    --bg:        #0a0a0f;
+    --bg-card:   #12121a;
+    --bg-slide:  #0d0d14;
+    --border:    #1e1e2e;
+    --text:      #e8e8ed;
+    --muted:     #8888a0;
+    --faint:     #555570;
+    --blue:      #4f8ff7;
+    --purple:    #9b6dff;
+    --cyan:      #22d3ee;
+    --orange:    #f59e0b;
+    --red:       #ef4444;
+    --green:     #34d399;
+    --teal:      #14b8a6;
+    --sans: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+    --mono: ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  html { scroll-behavior: smooth; }
+
+  body {
+    font-family: var(--sans);
+    background: var(--bg);
+    color: var(--text);
+    -webkit-font-smoothing: antialiased;
+    scroll-snap-type: y mandatory;
+    overflow-x: hidden;
+  }
+
+  .slide {
+    width: 100vw;
+    min-height: 100vh;
+    scroll-snap-align: start;
+    scroll-snap-stop: always;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 7vh 7vw;
+    background: var(--bg-slide);
+    border-bottom: 1px solid var(--border);
+  }
+
+  .slide-inner { width: 100%; max-width: 1000px; }
+  .slide-inner.wide { max-width: 1400px; }
+
+  .eyebrow {
+    font-family: var(--mono);
+    font-size: 11px;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--faint);
+    margin-bottom: 24px;
+  }
+
+  h1 {
+    font-size: clamp(42px, 6vw, 68px);
+    font-weight: 800;
+    line-height: 1.07;
+    letter-spacing: -0.03em;
+    margin-bottom: 20px;
+  }
+
+  h2 {
+    font-size: clamp(28px, 3.5vw, 40px);
+    font-weight: 700;
+    line-height: 1.15;
+    letter-spacing: -0.02em;
+    margin-bottom: 28px;
+  }
+
+  .grad {
+    background: linear-gradient(135deg, var(--blue), var(--purple), var(--cyan));
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+
+  .subtitle {
+    font-size: 18px;
+    line-height: 1.65;
+    color: var(--muted);
+    max-width: 620px;
+  }
+
+  .byline {
+    margin-top: 52px;
+    font-family: var(--mono);
+    font-size: 12px;
+    color: var(--faint);
+    display: flex;
+    gap: 28px;
+    flex-wrap: wrap;
+  }
+
+  .accent-bar {
+    width: 52px;
+    height: 3px;
+    border-radius: 2px;
+    background: linear-gradient(90deg, var(--blue), var(--purple));
+    margin-bottom: 40px;
+  }
+
+  /* Pillars */
+  .pillars {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 18px;
+  }
+
+  .pillar {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 24px 26px;
+    transition: border-color 0.25s;
+  }
+  .pillar:hover { border-color: var(--blue); }
+
+  .pillar-num {
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--faint);
+    letter-spacing: 0.1em;
+    margin-bottom: 10px;
+  }
+
+  .pillar h3 {
+    font-size: 18px;
+    font-weight: 700;
+    letter-spacing: -0.01em;
+    margin-bottom: 8px;
+  }
+
+  .pillar p {
+    font-size: 13px;
+    color: var(--muted);
+    line-height: 1.6;
+  }
+
+  /* Agent / detail slide */
+  .agent-slide-inner { width: 100%; max-width: 760px; }
+
+  .agent-title {
+    font-size: clamp(36px, 5vw, 56px);
+    font-weight: 800;
+    letter-spacing: -0.03em;
+    line-height: 1.05;
+    margin-bottom: 6px;
+  }
+
+  .agent-role-label {
+    font-family: var(--mono);
+    font-size: 12px;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--faint);
+    margin-bottom: 32px;
+  }
+
+  .agent-bullets {
+    list-style: none;
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+  }
+
+  .agent-bullets li {
+    font-size: 16px;
+    line-height: 1.5;
+    color: var(--text);
+    padding-left: 24px;
+    position: relative;
+  }
+
+  .agent-bullets li::before {
+    content: '';
+    position: absolute;
+    left: 0;
+    top: 9px;
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: var(--muted);
+  }
+  .dot-blue   li::before { background: var(--blue); }
+  .dot-purple li::before { background: var(--purple); }
+  .dot-cyan   li::before { background: var(--cyan); }
+  .dot-orange li::before { background: var(--orange); }
+  .dot-red    li::before { background: var(--red); }
+  .dot-green  li::before { background: var(--green); }
+  .dot-teal   li::before { background: var(--teal); }
+
+  /* Two-column card layout */
+  .red-card {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 28px 32px;
+    margin-bottom: 20px;
+  }
+
+  .red-card h3 {
+    font-size: 19px;
+    font-weight: 700;
+    margin-bottom: 12px;
+    color: var(--cyan);
+  }
+
+  .impact-list {
+    list-style: none;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+
+  .impact-list li {
+    font-size: 14px;
+    color: var(--text);
+    line-height: 1.55;
+    padding-left: 20px;
+    position: relative;
+  }
+
+  .impact-list li::before {
+    content: '';
+    position: absolute;
+    left: 0;
+    top: 8px;
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: var(--cyan);
+  }
+
+  .two-col {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 20px;
+  }
+
+  /* Impact grid */
+  .impact-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 32px;
+  }
+
+  .impact-col h3 {
+    font-family: var(--mono);
+    font-size: 11px;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--faint);
+    margin-bottom: 20px;
+  }
+
+  .impact-items {
+    list-style: none;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+
+  .impact-items li {
+    font-size: 14px;
+    line-height: 1.5;
+    padding-left: 22px;
+    position: relative;
+    color: var(--text);
+  }
+
+  .impact-items.done li::before {
+    content: '';
+    position: absolute;
+    left: 0;
+    top: 7px;
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: var(--blue);
+  }
+
+  .impact-items.next li::before {
+    content: '';
+    position: absolute;
+    left: 0;
+    top: 9px;
+    width: 14px;
+    height: 1.5px;
+    background: var(--purple);
+    border-radius: 1px;
+  }
+
+  /* Mermaid slide */
+  .diagram-wrap {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 28px;
+    display: flex;
+    justify-content: center;
+  }
+  .diagram-wrap .mermaid {
+    width: 100%;
+    font-family: var(--sans);
+  }
+  .diagram-wrap .mermaid svg {
+    width: 100% !important;
+    max-width: 100% !important;
+    height: auto !important;
+    min-height: 68vh;
+  }
+
+  /* Directory tree */
+  .tree {
+    font-family: var(--mono);
+    font-size: 14px;
+    line-height: 1.75;
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 24px 28px;
+    color: var(--muted);
+  }
+  .tree .dir { color: var(--blue); font-weight: 600; }
+  .tree .note { color: var(--faint); }
+
+  /* Counter + nav */
+  #counter {
+    position: fixed;
+    bottom: 22px;
+    right: 28px;
+    font-family: var(--mono);
+    font-size: 12px;
+    color: var(--faint);
+    user-select: none;
+    z-index: 100;
+  }
+
+  #nav-dots {
+    position: fixed;
+    bottom: 20px;
+    left: 50%;
+    transform: translateX(-50%);
+    display: flex;
+    gap: 8px;
+    align-items: center;
+    z-index: 100;
+  }
+
+  .dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--faint);
+    cursor: pointer;
+    border: none;
+    transition: all 0.3s;
+    padding: 0;
+  }
+  .dot.active { background: var(--blue); width: 22px; border-radius: 4px; }
+
+  @media (max-width: 680px) {
+    .two-col, .impact-grid, .pillars { grid-template-columns: 1fr; }
+  }
+</style>
+</head>
+<body>
+
+<!-- ── 1. Title ── -->
+<section class="slide" id="s1">
+  <div class="slide-inner">
+    <div class="accent-bar"></div>
+    <div class="eyebrow">ITU BDS MLOPS'26 &middot; v2 Branch</div>
+    <h1><span class="grad">Lecturer Tooling</span><br>Plan Overview</h1>
+    <p class="subtitle">Grading harness for the v2 exam extension: students deploy their trained model to Digital Ocean and monitor it for drift. We probe, score, and display.</p>
+    <div class="byline">
+      <span>Branch: v2</span>
+      <span>Stack: Python · FastAPI · vanilla HTML+JS</span>
+      <span>7 slides</span>
+      <span>~5 min</span>
+    </div>
+  </div>
+</section>
+
+<!-- ── 2. Four components pillars ── -->
+<section class="slide" id="s2">
+  <div class="slide-inner">
+    <div class="eyebrow">Overview · Four tooling components</div>
+    <h2>What we are building</h2>
+    <div class="pillars">
+      <div class="pillar">
+        <div class="pillar-num">01 · Event engine</div>
+        <h3 style="color:var(--blue)">Probe &amp; stress</h3>
+        <p>Scheduled worker. Sends a health inference request every few minutes to each "ready-for-events" endpoint. Records reachability + correctness independently. Injects drift to test recovery.</p>
+      </div>
+      <div class="pillar">
+        <div class="pillar-num">02 · Dashboard</div>
+        <h3 style="color:var(--cyan)">Leaderboard SPA</h3>
+        <p>Public read-only. Claude-Status-style bars per model over the last N probes. Aggregate uptime / correctness %, last-seen, recovery-event count.</p>
+      </div>
+      <div class="pillar">
+        <div class="pillar-num">03 · Admin SPA</div>
+        <h3 style="color:var(--purple)">Team management</h3>
+        <p>Lecturer-only. Assign, enable, and disable teams and their credentials. Force-toggle any team's ready-for-events flag when needed.</p>
+      </div>
+      <div class="pillar">
+        <div class="pillar-num">04 · Access control</div>
+        <h3 style="color:var(--teal)">Read-all, write-own</h3>
+        <p>Everyone can read. Only the owning team can change their endpoint URL and ready-for-events toggle. Team-id + password, hashed. Deliberately simple.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ── 3. Architecture mermaid ── -->
+<section class="slide" id="s3">
+  <div class="slide-inner wide">
+    <div class="eyebrow">Architecture</div>
+    <h2>How it fits together</h2>
+    <div class="diagram-wrap">
+      <div class="mermaid">
+graph LR
+    Lecturer[["👩‍🏫 Lecturer"]]
+    Team[["👥 Student team"]]
+    Public[["🌐 Public viewer"]]
+    Student_EP[["🚀 Student model<br/>on Digital Ocean"]]
+
+    subgraph Platform["platform/"]
+      Admin["Admin SPA<br/>(vanilla HTML+JS)"]
+      Dash["Dashboard SPA<br/>(vanilla HTML+JS)"]
+      API["FastAPI<br/>HTTP wrapper"]
+      Engine["Event engine<br/>(scheduled worker)"]
+      Repo{{"Repository interface<br/>(shared Python module)"}}
+      RegDB[("Registry DB<br/>teams + models")]
+      StatDB[("Status DB<br/>probes + recoveries")]
+    end
+
+    Lecturer -->|manage teams| Admin
+    Team -->|update endpoint / toggle| Dash
+    Public -->|view| Dash
+    Admin --> API
+    Dash --> API
+    API --> Repo
+    Engine -->|imports in-process| Repo
+    Engine -.->|probe every few min| Student_EP
+    Repo --> RegDB
+    Repo --> StatDB
+
+    classDef svc fill:#12121a,stroke:#4f8ff7,color:#e8e8ed;
+    classDef db  fill:#12121a,stroke:#9b6dff,color:#e8e8ed;
+    classDef ext fill:#0d0d14,stroke:#555570,color:#8888a0;
+    class Admin,Dash,API,Engine,Repo svc;
+    class RegDB,StatDB db;
+    class Lecturer,Team,Public,Student_EP ext;
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ── 4. Event engine detail ── -->
+<section class="slide" id="s4">
+  <div class="agent-slide-inner">
+    <div class="eyebrow">Component 01 / 04</div>
+    <div class="agent-title" style="color:var(--blue)">Event engine</div>
+    <div class="agent-role-label">Scheduled probe worker &nbsp;·&nbsp; platform/event-engine/</div>
+    <ul class="agent-bullets dot-blue">
+      <li>Runs every few minutes. For each "ready-for-events" model, fires one health inference request.</li>
+      <li><strong>Two independent indicators per probe</strong>: reachable (did the endpoint respond?) and correct (was the answer right?).</li>
+      <li>Periodically injects drift-inducing traffic to test that students' monitoring + retrain-and-redeploy loop actually fires.</li>
+      <li>Detects recovery when a run of <code>correct=false</code> is followed by a return to <code>correct=true</code>.</li>
+      <li>Appends every result to the Status DB via the shared repository module — no direct file writes.</li>
+    </ul>
+  </div>
+</section>
+
+<!-- ── 5. Data model ── -->
+<section class="slide" id="s5">
+  <div class="slide-inner">
+    <div class="eyebrow">Data · Two file-based stores</div>
+    <h2>Registry &amp; Status</h2>
+    <div class="two-col">
+      <div class="red-card">
+        <h3 style="color:var(--blue)">Registry DB</h3>
+        <ul class="impact-list">
+          <li><strong>Teams</strong> — team_id, password_hash, enabled, created_at</li>
+          <li><strong>Models</strong> — model_id, owner_team_id, display_name, endpoint_url, ready_for_events, timestamps</li>
+          <li>Written by admin SPA (teams) and by team members via dashboard (their own model rows)</li>
+          <li>Read by both SPAs and the event engine</li>
+        </ul>
+      </div>
+      <div>
+        <div class="red-card" style="margin-bottom:16px">
+          <h3 style="color:var(--purple)">Status DB</h3>
+          <ul class="impact-list">
+            <li><strong>Probes</strong> — timestamp, reachable, correct, latency_ms, probe_kind</li>
+            <li><strong>Recoveries</strong> — detected_at, redeployed_at, new_model_version</li>
+            <li>Append-only; written by event engine only</li>
+          </ul>
+        </div>
+        <div class="red-card">
+          <h3 style="color:var(--cyan)">Why separate?</h3>
+          <ul class="impact-list">
+            <li>Probe history grows fast — keep registry small</li>
+            <li>Rotate / prune status independently</li>
+            <li>Swap backends (SQLite → Postgres) without touching consumers</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ── 6. Stack + layout ── -->
+<section class="slide" id="s6">
+  <div class="slide-inner">
+    <div class="eyebrow">Stack &amp; layout</div>
+    <h2>Committed choices</h2>
+    <div class="two-col">
+      <div class="red-card">
+        <h3 style="color:var(--teal)">Stack</h3>
+        <ul class="impact-list">
+          <li><strong>Python</strong> everywhere on the backend — matches the course</li>
+          <li><strong>FastAPI</strong> wraps the shared repo module → both SPAs</li>
+          <li>Event engine imports the repo module <em>in-process</em> — one interface, two callers</li>
+          <li>SPAs are <strong>vanilla HTML + JS</strong>, no build step</li>
+          <li>Alpine.js allowed as an optional sprinkle if reactivity gets painful</li>
+          <li>Password hashing via bcrypt (passlib)</li>
+        </ul>
+      </div>
+      <div>
+        <div class="tree">
+<span class="dir">platform/</span>
+├── <span class="dir">registry/</span>     <span class="note"># repo interface + file impl</span>
+├── <span class="dir">event-engine/</span> <span class="note"># scheduled probe worker</span>
+├── <span class="dir">dashboard/</span>    <span class="note"># public SPA</span>
+├── <span class="dir">admin/</span>        <span class="note"># lecturer SPA</span>
+└── <span class="dir">data/</span>         <span class="note"># gitignored DB files</span>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ── 7. In / out of scope + next steps ── -->
+<section class="slide" id="s7">
+  <div class="slide-inner">
+    <div class="eyebrow">Wrap-up</div>
+    <h2>Scope &amp; next steps</h2>
+    <div class="impact-grid">
+      <div class="impact-col">
+        <h3>In scope · next</h3>
+        <ul class="impact-items done">
+          <li>Commit <code>CLAUDE.md</code> on branch v2</li>
+          <li>Scaffold <code>platform/</code> skeleton with <code>.gitkeep</code>s</li>
+          <li>Choose file-DB shape (JSONL vs SQLite)</li>
+          <li>Build <code>registry/</code> module first — blocks everything</li>
+          <li>Event engine → FastAPI → dashboard SPA → admin SPA</li>
+          <li>Local <code>make dev</code> bringing up both SPAs + engine + seeded DBs</li>
+        </ul>
+      </div>
+      <div class="impact-col">
+        <h3>Out of scope · v1</h3>
+        <ul class="impact-items next">
+          <li>Cloud hosting / production deploy</li>
+          <li>Real multi-region monitoring</li>
+          <li>Alerting (email, Slack, PagerDuty)</li>
+          <li>Historical rollups — keep everything for now</li>
+          <li>Fancy auth (OAuth, SSO)</li>
+          <li>Deploying <em>anything</em> to Digital Ocean ourselves — students own their endpoints</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+</section>
+
+<div id="counter">1 / 7</div>
+<div id="nav-dots"></div>
+
+<script>
+  mermaid.initialize({
+    startOnLoad: true,
+    theme: 'dark',
+    themeVariables: {
+      background: '#12121a',
+      primaryColor: '#12121a',
+      primaryTextColor: '#e8e8ed',
+      primaryBorderColor: '#4f8ff7',
+      lineColor: '#8888a0',
+      secondaryColor: '#1e1e2e',
+      tertiaryColor: '#0d0d14',
+      fontFamily: 'Inter, system-ui, sans-serif',
+      fontSize: '18px'
+    },
+    flowchart: { htmlLabels: true, curve: 'basis', padding: 24, useMaxWidth: false, nodeSpacing: 60, rankSpacing: 90 }
+  });
+</script>
+
+<script>
+(function () {
+  const slides = Array.from(document.querySelectorAll('.slide'));
+  const counter = document.getElementById('counter');
+  const navDots = document.getElementById('nav-dots');
+  let current = 0;
+
+  slides.forEach((_, i) => {
+    const btn = document.createElement('button');
+    btn.className = 'dot' + (i === 0 ? ' active' : '');
+    btn.addEventListener('click', () => go(i));
+    navDots.appendChild(btn);
+  });
+
+  function updateDots() {
+    navDots.querySelectorAll('.dot').forEach((d, i) => d.classList.toggle('active', i === current));
+    counter.textContent = (current + 1) + ' / ' + slides.length;
+  }
+
+  function go(i) {
+    current = Math.max(0, Math.min(slides.length - 1, i));
+    slides[current].scrollIntoView({ behavior: 'smooth' });
+  }
+
+  document.addEventListener('keydown', e => {
+    if (e.key === 'ArrowRight' || e.key === 'ArrowDown' || e.key === ' ') { e.preventDefault(); go(current + 1); }
+    if (e.key === 'ArrowLeft'  || e.key === 'ArrowUp')                    { e.preventDefault(); go(current - 1); }
+  });
+
+  const obs = new IntersectionObserver(entries => {
+    entries.forEach(en => {
+      if (en.isIntersecting) {
+        current = slides.indexOf(en.target);
+        updateDots();
+      }
+    });
+  }, { threshold: 0.55 });
+
+  slides.forEach(s => obs.observe(s));
+  updateDots();
+})();
+</script>
+</body>
+</html>
