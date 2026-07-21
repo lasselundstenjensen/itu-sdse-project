@@ -1,0 +1,363 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ITU SDSE v2 · Model leaderboard</title>
+<style>
+  :root{
+    --paper:#FAFAF7;
+    --panel:#FFFFFF;
+    --ink:#1A1A17;
+    --ink-soft:#565650;
+    --ink-faint:#8A8A82;
+    --line:#E5E5E0;
+    --green:#7CB342;
+    --amber:#F2B01E;
+    --red:#E5484D;
+  }
+  *{margin:0;padding:0;box-sizing:border-box;}
+  body{
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",system-ui,sans-serif;
+    background:var(--paper);color:var(--ink);
+    font-size:14.5px;line-height:1.5;
+  }
+  .mono{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;}
+  .page{max-width:1100px;margin:0 auto;padding:44px 30px 60px;}
+
+  header{margin-bottom:18px;display:flex;justify-content:space-between;align-items:flex-end;flex-wrap:wrap;gap:14px;}
+  h1{font-size:22px;font-weight:700;letter-spacing:-.01em;}
+  .sub{font-size:13px;color:var(--ink-faint);margin-top:3px;}
+  .header-right{font-size:13px;color:var(--ink-faint);text-align:right;}
+  .header-right b{color:var(--ink-soft);font-weight:600;}
+
+  .rows{display:flex;flex-direction:column;}
+
+  .row{
+    background:var(--panel);border:1px solid var(--line);
+    padding:18px 22px 14px;margin-bottom:10px;
+    position:relative;
+  }
+
+  .row-head{
+    display:flex;justify-content:space-between;align-items:flex-start;
+    margin-bottom:10px;gap:16px;
+  }
+  .row-title{min-width:0;flex:1;}
+  .row-title .team{
+    font-size:16px;font-weight:700;color:var(--ink);letter-spacing:-.005em;
+    display:block;
+  }
+  .row-title .url{
+    font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+    font-size:11.5px;color:var(--ink-faint);
+    display:block;margin-top:2px;
+    overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+  }
+  .row-right{
+    display:flex;align-items:center;gap:12px;
+    flex-shrink:0;
+  }
+  .row-status{
+    font-size:13.5px;font-weight:600;
+  }
+  .status-operational{color:var(--green);}
+  .status-degraded   {color:var(--amber);}
+  .status-unreachable{color:var(--red);}
+  .status-pending    {color:var(--ink-faint);}
+
+  .edit-btn{
+    background:transparent;border:1px solid var(--line);
+    color:var(--ink-faint);font-size:11px;
+    padding:3px 9px;border-radius:2px;cursor:pointer;
+    font-family:inherit;letter-spacing:.02em;
+  }
+  .edit-btn:hover{border-color:var(--ink-faint);color:var(--ink-soft);}
+
+  .strip{
+    display:flex;gap:2px;align-items:stretch;
+    height:34px;margin-bottom:8px;
+  }
+  .bar{
+    flex:1 1 0;min-width:2px;border-radius:1px;
+    background:#EDEDE7;
+  }
+  .bar.green{background:var(--green);}
+  .bar.amber{background:var(--amber);}
+  .bar.red  {background:var(--red);}
+
+  .row-foot{
+    display:grid;grid-template-columns:1fr auto 1fr;
+    align-items:center;gap:10px;
+    font-size:12.5px;color:var(--ink-faint);
+  }
+  .row-foot .left{text-align:left;}
+  .row-foot .right{text-align:right;}
+  .row-foot .mid{
+    color:var(--ink-soft);
+    display:flex;align-items:center;gap:10px;white-space:nowrap;
+  }
+  .row-foot .mid::before,
+  .row-foot .mid::after{
+    content:"";display:block;width:80px;height:1px;background:var(--line);
+  }
+
+  /* Inline edit panel (per row, revealed by Edit button) */
+  .edit-panel{
+    display:none;border-top:1px solid var(--line);
+    margin-top:12px;padding-top:12px;
+    display:grid;grid-template-columns:1fr 1fr 1fr auto auto;
+    gap:8px;align-items:center;
+  }
+  .row.editing .edit-panel{display:grid;}
+  .edit-panel input{
+    font:inherit;font-size:13px;
+    padding:6px 8px;border:1px solid var(--line);
+    background:var(--paper);color:var(--ink);border-radius:2px;
+    min-width:0;
+  }
+  .edit-panel input.mono{
+    font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+    font-size:12px;
+  }
+  .edit-panel input:focus{outline:none;border-color:var(--ink-soft);}
+  .edit-panel .save{
+    background:var(--ink);color:var(--paper);
+    border:none;padding:7px 14px;font:inherit;font-size:12px;
+    cursor:pointer;border-radius:2px;letter-spacing:.02em;
+  }
+  .edit-panel .save:hover{background:var(--ink-soft);}
+  .edit-panel .cancel{
+    background:transparent;border:1px solid var(--line);
+    color:var(--ink-faint);padding:6px 10px;font:inherit;font-size:12px;
+    cursor:pointer;border-radius:2px;
+  }
+  .edit-msg{
+    grid-column:1 / -1;
+    font-size:12px;color:var(--red);
+    margin-top:2px;min-height:1em;
+  }
+  .edit-msg.ok{color:var(--green);}
+
+  .empty{
+    text-align:center;color:var(--ink-faint);
+    padding:22px 0;font-size:13px;
+  }
+
+  /* Register-your-endpoint block at the bottom */
+  .register{
+    margin-top:26px;padding:22px 24px;
+    background:var(--panel);border:1px solid var(--line);
+  }
+  .register h2{
+    font-size:14px;font-weight:700;letter-spacing:-.005em;margin-bottom:4px;
+  }
+  .register p{
+    font-size:12.5px;color:var(--ink-faint);margin-bottom:14px;line-height:1.5;
+  }
+  .register-form{
+    display:grid;grid-template-columns:1fr 2fr auto;gap:10px;align-items:center;
+  }
+  .register-form input{
+    font:inherit;font-size:13px;
+    padding:8px 10px;border:1px solid var(--line);
+    background:var(--paper);color:var(--ink);border-radius:2px;
+    min-width:0;
+  }
+  .register-form input.mono{
+    font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+    font-size:12px;
+  }
+  .register-form input:focus{outline:none;border-color:var(--ink-soft);}
+  .register-form button{
+    background:var(--ink);color:var(--paper);
+    border:none;padding:9px 18px;font:inherit;font-size:13px;
+    cursor:pointer;border-radius:2px;letter-spacing:.02em;
+  }
+  .register-form button:hover{background:var(--ink-soft);}
+  .register-msg{
+    font-size:12.5px;margin-top:10px;color:var(--red);min-height:1em;
+  }
+  .register-msg.ok{color:var(--green);}
+
+  @media (max-width:720px){
+    .register-form{grid-template-columns:1fr;}
+    .edit-panel{grid-template-columns:1fr;}
+  }
+</style>
+</head>
+<body>
+<div class="page">
+
+<header>
+  <div>
+    <h1>Model leaderboard</h1>
+    <div class="sub">ITU SDSE v2 · student model deployments · reachability &amp; correctness</div>
+  </div>
+  <div class="header-right">
+    Uptime over the last <b><span id="probe-window">90</span></b> probes.
+  </div>
+</header>
+
+<div class="rows" id="rows">
+  <div class="empty">Loading…</div>
+</div>
+
+<section class="register">
+  <h2>Register your inference endpoint</h2>
+  <p>New team? Paste the token your lecturer issued alongside your model's public inference URL. You can edit either field later using the same token from the <b>Edit</b> button on your row above.</p>
+  <form class="register-form" id="reg-form" onsubmit="return submitRegister(event)">
+    <input id="reg-token" class="mono" type="text" placeholder="team token · e.g. tok-foxtrot-k1l2" autocomplete="off">
+    <input id="reg-url"   class="mono" type="url"  placeholder="https://your-team.students.example/infer" autocomplete="off">
+    <button type="submit">Register</button>
+  </form>
+  <div class="register-msg" id="reg-msg"></div>
+</section>
+
+</div>
+
+<script>
+  const STATUS_LABEL = {
+    operational: "Operational",
+    degraded:    "Degraded",
+    unreachable: "Unreachable",
+    pending:     "Pending first probe",
+  };
+
+  function probeClass(p){
+    if (p.reachable === false) return "red";
+    if (p.correct    === false) return "amber";
+    if (p.correct    === true)  return "green";
+    return "";
+  }
+
+  function fmtPct(x){ return x == null ? "—" : x.toFixed(2) + " %"; }
+  function esc(s){ return String(s).replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c])); }
+
+  function renderRow(m, window){
+    const bars = [];
+    const pad = Math.max(0, window - m.probes.length);
+    for (let i = 0; i < pad; i++) bars.push('<div class="bar"></div>');
+    for (const p of m.probes) bars.push(`<div class="bar ${probeClass(p)}"></div>`);
+
+    const statusClass = "status-" + m.current_status;
+    const statusLabel = STATUS_LABEL[m.current_status] || m.current_status;
+
+    return `
+      <div class="row" data-model-id="${esc(m.model_id)}">
+        <div class="row-head">
+          <div class="row-title">
+            <span class="team">${esc(m.team_name)}</span>
+            <span class="url" title="${esc(m.endpoint_url)}">${esc(m.endpoint_url)}</span>
+          </div>
+          <div class="row-right">
+            <div class="row-status ${statusClass}">${statusLabel}</div>
+            <button class="edit-btn" onclick="toggleEdit(this)">Edit</button>
+          </div>
+        </div>
+        <div class="strip">${bars.join("")}</div>
+        <div class="row-foot">
+          <div class="left">${window} probes ago</div>
+          <div class="mid">${fmtPct(m.correctness_pct)} correctness</div>
+          <div class="right">Today</div>
+        </div>
+        <div class="edit-panel">
+          <input class="edit-token mono" type="text" placeholder="team token" autocomplete="off">
+          <input class="edit-team"       type="text" placeholder="team name"  value="${esc(m.team_name)}"    autocomplete="off">
+          <input class="edit-url  mono"  type="url"  placeholder="endpoint URL" value="${esc(m.endpoint_url)}" autocomplete="off">
+          <button class="save"   onclick="saveEdit(this)">Save</button>
+          <button class="cancel" onclick="toggleEdit(this)">Cancel</button>
+          <div class="edit-msg"></div>
+        </div>
+      </div>
+    `;
+  }
+
+  function toggleEdit(btn){
+    const row = btn.closest(".row");
+    row.classList.toggle("editing");
+    if (row.classList.contains("editing")){
+      row.querySelector(".edit-token").focus();
+      const msg = row.querySelector(".edit-msg");
+      msg.textContent = ""; msg.classList.remove("ok");
+    }
+  }
+
+  async function saveEdit(btn){
+    const row = btn.closest(".row");
+    const modelId = row.dataset.modelId;
+    const token   = row.querySelector(".edit-token").value.trim();
+    const teamNm  = row.querySelector(".edit-team").value.trim();
+    const url     = row.querySelector(".edit-url").value.trim();
+    const msg     = row.querySelector(".edit-msg");
+    msg.classList.remove("ok"); msg.textContent = "";
+
+    if (!token){ msg.textContent = "Token is required to save changes."; return; }
+
+    try {
+      const res = await fetch(`/api/models/${encodeURIComponent(modelId)}`, {
+        method:  "PATCH",
+        headers: {"content-type": "application/json"},
+        body:    JSON.stringify({token, team_name: teamNm, endpoint_url: url}),
+      });
+      const body = await res.json().catch(() => ({}));
+      if (!res.ok){
+        msg.textContent = body.detail || `Save failed (${res.status})`;
+        return;
+      }
+      msg.classList.add("ok"); msg.textContent = "Saved.";
+      setTimeout(load, 400);
+    } catch (e){
+      msg.textContent = "Network error: " + e.message;
+    }
+  }
+
+  async function submitRegister(ev){
+    ev.preventDefault();
+    const token = document.getElementById("reg-token").value.trim();
+    const url   = document.getElementById("reg-url").value.trim();
+    const msg   = document.getElementById("reg-msg");
+    msg.classList.remove("ok"); msg.textContent = "";
+
+    if (!token || !url){
+      msg.textContent = "Both token and endpoint URL are required.";
+      return false;
+    }
+    try {
+      const res = await fetch("/api/models", {
+        method:  "POST",
+        headers: {"content-type": "application/json"},
+        body:    JSON.stringify({token, endpoint_url: url}),
+      });
+      const body = await res.json().catch(() => ({}));
+      if (!res.ok){
+        msg.textContent = body.detail || `Register failed (${res.status})`;
+        return false;
+      }
+      msg.classList.add("ok");
+      msg.textContent = `Registered as ${body.team_name}. It will appear once probing starts.`;
+      document.getElementById("reg-form").reset();
+      setTimeout(load, 400);
+    } catch (e){
+      msg.textContent = "Network error: " + e.message;
+    }
+    return false;
+  }
+
+  async function load(){
+    const res = await fetch("/api/dashboard");
+    if (!res.ok){
+      document.getElementById("rows").innerHTML =
+        `<div class="empty">Failed to load: ${res.status}</div>`;
+      return;
+    }
+    const data = await res.json();
+    document.getElementById("probe-window").textContent = data.probe_window;
+    document.getElementById("rows").innerHTML =
+      data.models.map(m => renderRow(m, data.probe_window)).join("");
+  }
+
+  load();
+</script>
+</body>
+</html>

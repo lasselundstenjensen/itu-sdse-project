@@ -1,0 +1,507 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ITU SDSE v2 — Lecturer Tooling Plan</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+<style>
+  :root{
+    --ink:#16202B;
+    --ink-soft:#4A5768;
+    --ink-faint:#7A8699;
+    --paper:#FAFBFC;
+    --panel:#FFFFFF;
+    --line:#DDE3EA;
+    --accent:#1F4E8C;
+    --accent-soft:#EAF1F9;
+    --accent-deep:#123258;
+    --req:#B3261E;
+    --req-bg:#FBEAE9;
+    --cond:#B45309;
+    --cond-bg:#FDF0E0;
+    --watch:#A16207;
+    --watch-bg:#FEF9E0;
+    --ok:#1B7A48;
+    --ok-bg:#E4F1EA;
+  }
+  *{margin:0;padding:0;box-sizing:border-box;}
+  html{scroll-behavior:smooth;}
+  body{
+    font-family:'IBM Plex Sans',-apple-system,sans-serif;
+    background:var(--paper);color:var(--ink);
+    font-size:14.5px;line-height:1.55;
+  }
+  .page{max-width:1080px;margin:0 auto;padding:44px 32px 72px;}
+  .mono{font-family:'IBM Plex Mono',monospace;}
+
+  header{border-bottom:3px solid var(--ink);padding-bottom:18px;margin-bottom:22px;}
+  .doc-id{font-family:'IBM Plex Mono',monospace;font-size:11.5px;color:var(--accent);letter-spacing:.04em;margin-bottom:12px;}
+  h1{font-size:30px;font-weight:700;line-height:1.15;letter-spacing:-0.015em;}
+  .subtitle{font-size:15px;color:var(--ink-soft);margin-top:8px;max-width:820px;}
+  .meta{display:flex;flex-wrap:wrap;gap:4px 22px;margin-top:12px;font-size:12.5px;color:var(--ink-soft);}
+  .meta span b{color:var(--ink);font-weight:600;}
+
+  /* explainer band */
+  .band{
+    background:var(--accent-soft);border:1px solid #C6D8ED;padding:14px 20px;margin-bottom:22px;font-size:13px;color:var(--ink-soft);
+  }
+  .band .kicker{font-family:'IBM Plex Mono',monospace;font-size:11px;font-weight:700;letter-spacing:.08em;color:var(--accent);text-transform:uppercase;display:block;margin-bottom:5px;}
+  .band b{color:var(--ink);font-weight:600;}
+
+  /* legend row */
+  .legend{
+    background:var(--panel);border:1px solid var(--line);
+    padding:10px 16px;margin-bottom:22px;
+    display:flex;flex-wrap:wrap;gap:8px 20px;align-items:center;font-size:12px;color:var(--ink-soft);
+  }
+  .legend b{font-family:'IBM Plex Mono',monospace;font-size:10.5px;letter-spacing:.09em;color:var(--accent);font-weight:700;text-transform:uppercase;margin-right:4px;}
+  .tag{
+    font-family:'IBM Plex Mono',monospace;font-size:10px;font-weight:600;letter-spacing:.05em;
+    padding:2px 7px 3px;border-radius:3px;white-space:nowrap;display:inline-block;
+  }
+  .tag-svc{background:var(--accent-soft);color:var(--accent);border:1px solid #C6D8ED;}
+  .tag-db{background:var(--cond-bg);color:var(--cond);border:1px solid #EBCBA3;}
+  .tag-spa{background:#F1E9FB;color:#5A3FA0;border:1px solid #D5C6EE;}
+  .tag-ext{background:#F1F3F6;color:var(--ink-faint);border:1px solid var(--line);}
+  .tag-req{background:var(--req-bg);color:var(--req);border:1px solid #E4B6B2;}
+  .tag-ok{background:var(--ok-bg);color:var(--ok);border:1px solid #B7D8C4;}
+
+  /* section headers */
+  .section{margin-top:34px;}
+  .section-head{
+    display:flex;align-items:baseline;gap:12px;flex-wrap:wrap;
+    margin-bottom:12px;padding-bottom:6px;border-bottom:1px solid var(--line);
+  }
+  .section-label{
+    font-family:'IBM Plex Mono',monospace;font-size:10.5px;font-weight:700;
+    letter-spacing:.09em;color:var(--accent);text-transform:uppercase;
+    padding:3px 9px 4px;background:var(--accent-soft);border:1px solid #C6D8ED;
+  }
+  .section-head h2{font-size:19px;font-weight:700;letter-spacing:-.01em;}
+  .section-head .role{font-size:12.5px;color:var(--ink-soft);font-style:italic;}
+
+  /* pillar rows — component summaries */
+  .rows{border-top:2px solid var(--ink);}
+  .row{
+    display:grid;grid-template-columns:44px 1fr auto;gap:14px;align-items:start;
+    padding:14px 0;border-bottom:1px solid var(--line);
+  }
+  .row .num{font-family:'IBM Plex Mono',monospace;font-size:12px;color:var(--accent);font-weight:600;padding-top:2px;}
+  .row .body h3{font-size:15px;font-weight:700;letter-spacing:-0.005em;margin-bottom:3px;line-height:1.25;}
+  .row .body p{font-size:13.5px;color:var(--ink-soft);}
+  .row .body p b{color:var(--ink);font-weight:600;}
+  .row .body p code{font-family:'IBM Plex Mono',monospace;font-size:12px;background:#F1F3F6;padding:1px 5px;border-radius:2px;color:var(--ink);}
+  .row .tags{display:flex;gap:4px;flex-wrap:wrap;justify-content:flex-end;max-width:220px;padding-top:2px;}
+
+  /* diagram wrapper */
+  .diagram-wrap{
+    background:var(--panel);border:1px solid var(--line);
+    padding:22px;
+  }
+  .diagram-wrap .mermaid{width:100%;font-family:'IBM Plex Sans',sans-serif;}
+  .diagram-wrap .mermaid svg{width:100% !important;max-width:100% !important;height:auto !important;}
+
+  /* two-column card grid */
+  .two-col{display:grid;grid-template-columns:1fr 1fr;gap:18px;}
+  .card{
+    background:var(--panel);border:1px solid var(--line);
+    padding:16px 20px 18px;
+  }
+  .card h3{
+    font-size:14px;font-weight:700;letter-spacing:-0.005em;margin-bottom:10px;
+    display:flex;align-items:center;gap:8px;
+  }
+  .card h3 .marker{
+    display:inline-block;width:8px;height:8px;background:var(--accent);border-radius:1px;
+  }
+  .card h3 .marker.purple{background:#5A3FA0;}
+  .card h3 .marker.cond{background:var(--cond);}
+  .card h3 .marker.ok{background:var(--ok);}
+  .card ul{list-style:none;}
+  .card li{
+    font-size:13px;color:var(--ink-soft);line-height:1.5;
+    padding:5px 0 5px 14px;position:relative;
+  }
+  .card li::before{
+    content:"";position:absolute;left:0;top:11px;
+    width:5px;height:5px;background:var(--ink-faint);border-radius:50%;
+  }
+  .card li b{color:var(--ink);font-weight:600;}
+  .card li code{font-family:'IBM Plex Mono',monospace;font-size:11.5px;background:#F1F3F6;padding:1px 4px;border-radius:2px;color:var(--ink);}
+
+  /* event-engine detail block */
+  .detail{
+    background:var(--panel);border:1px solid var(--line);
+    padding:18px 22px;
+  }
+  .detail h3{font-size:15px;font-weight:700;margin-bottom:10px;}
+  .detail ul{list-style:none;}
+  .detail li{
+    font-size:13.5px;color:var(--ink-soft);line-height:1.55;
+    padding:6px 0 6px 20px;position:relative;
+    border-top:1px dashed var(--line);
+  }
+  .detail li:first-child{border-top:none;padding-top:2px;}
+  .detail li::before{
+    content:"";position:absolute;left:0;top:13px;
+    width:7px;height:7px;background:var(--accent);border-radius:50%;
+  }
+  .detail li b{color:var(--ink);font-weight:600;}
+  .detail li code{font-family:'IBM Plex Mono',monospace;font-size:12px;background:#F1F3F6;padding:1px 5px;border-radius:2px;color:var(--ink);}
+
+  /* directory tree */
+  .tree{
+    font-family:'IBM Plex Mono',monospace;font-size:12.5px;line-height:1.75;
+    background:#F5F7FA;border:1px solid var(--line);
+    padding:16px 20px;color:var(--ink-soft);
+  }
+  .tree .dir{color:var(--accent);font-weight:600;}
+  .tree .note{color:var(--ink-faint);}
+
+  /* scope table */
+  .scope-grid{display:grid;grid-template-columns:1fr 1fr;gap:18px;}
+  .scope-col h3{
+    font-family:'IBM Plex Mono',monospace;font-size:11px;text-transform:uppercase;
+    letter-spacing:.09em;color:var(--accent);font-weight:700;margin-bottom:10px;
+  }
+  .scope-col.out h3{color:var(--ink-faint);}
+  .scope-col ul{list-style:none;}
+  .scope-col li{
+    font-size:13px;color:var(--ink-soft);line-height:1.5;
+    padding:6px 0 6px 22px;position:relative;
+    border-top:1px dashed var(--line);
+  }
+  .scope-col li:first-child{border-top:none;}
+  .scope-col.in li::before{
+    content:"";position:absolute;left:0;top:12px;
+    width:8px;height:8px;background:var(--accent);border-radius:1px;
+  }
+  .scope-col.out li::before{
+    content:"";position:absolute;left:0;top:14px;
+    width:10px;height:2px;background:var(--ink-faint);
+  }
+  .scope-col li b{color:var(--ink);font-weight:600;}
+  .scope-col li code{font-family:'IBM Plex Mono',monospace;font-size:11.5px;background:#F1F3F6;padding:1px 4px;border-radius:2px;color:var(--ink);}
+
+  /* dark strategy footer */
+  .strategy{
+    margin-top:36px;background:var(--ink);color:#E8ECF2;padding:22px 28px;
+  }
+  .strategy h2{font-size:12px;text-transform:uppercase;letter-spacing:.1em;color:#9FB6D6;margin-bottom:12px;font-weight:700;}
+  .strategy p{font-size:13px;color:#C7D2E0;line-height:1.55;margin-bottom:8px;}
+  .strategy p:last-child{margin-bottom:0;}
+  .strategy b{color:#fff;font-weight:600;}
+  .strategy code{font-family:'IBM Plex Mono',monospace;font-size:12px;background:rgba(255,255,255,.08);padding:1px 5px;border-radius:2px;color:#fff;}
+
+  footer{margin-top:24px;font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--ink-faint);}
+
+  @media (max-width:820px){
+    .two-col,.scope-grid{grid-template-columns:1fr;}
+    .row{grid-template-columns:36px 1fr;}
+    .row .tags{grid-column:2;justify-content:flex-start;max-width:none;padding-top:0;}
+  }
+</style>
+</head>
+<body>
+<div class="page">
+
+<header>
+  <div class="doc-id">itu-sdse/v2 · lecturer-tooling · PLAN</div>
+  <h1>Lecturer tooling — plan overview</h1>
+  <p class="subtitle">
+    Grading harness for the v2 exam extension: students deploy their trained model to Digital Ocean and monitor it for drift. We probe, score, and display.
+  </p>
+  <div class="meta">
+    <span><b>Branch</b> v2</span>
+    <span><b>Course</b> ITU BDS MLOPS'26</span>
+    <span><b>Stack</b> Python · FastAPI · vanilla HTML+JS</span>
+    <span><b>Date</b> 10 July 2026</span>
+  </div>
+</header>
+
+<div class="band">
+  <span class="kicker">How this pack is organised</span>
+  <b>Four tooling components</b> — event engine, dashboard, admin SPA, access control — sit on top of <b>two file-based data stores</b> and a <b>shared repository interface</b>. FastAPI wraps the interface for both SPAs; the event engine imports it in-process. Below: one summary row per component, then the architecture diagram, event-engine detail, data model, stack &amp; layout, and scope boundaries.
+</div>
+
+<div class="legend">
+  <b>Marker legend</b>
+  <span><span class="tag tag-svc">SERVICE</span> code we run</span>
+  <span><span class="tag tag-db">DATA</span> file-backed store</span>
+  <span><span class="tag tag-spa">SPA</span> vanilla HTML+JS</span>
+  <span><span class="tag tag-ext">EXTERNAL</span> student-owned</span>
+</div>
+
+<!-- ── Components ── -->
+<div class="section">
+  <div class="section-head">
+    <span class="section-label">§01 · Components</span>
+    <h2>What we are building</h2>
+    <span class="role">— four pieces, one interface underneath.</span>
+  </div>
+
+  <div class="rows">
+
+    <div class="row">
+      <div class="num">01</div>
+      <div class="body">
+        <h3>Event engine — probe &amp; stress</h3>
+        <p>Scheduled worker. Sends a health inference request every few minutes to each <em>ready-for-events</em> endpoint. Records <b>reachability</b> and <b>correctness</b> as two independent indicators per probe. Periodically injects drift-inducing traffic to test that students' retrain-and-redeploy loop actually fires.</p>
+      </div>
+      <div class="tags"><span class="tag tag-svc">SERVICE</span><span class="tag tag-req">SCHEDULED</span></div>
+    </div>
+
+    <div class="row">
+      <div class="num">02</div>
+      <div class="body">
+        <h3>Leaderboard dashboard — public SPA</h3>
+        <p>Read-only, viewable by everyone. Claude-Status-style horizontal bars per model over the last N probes, plus aggregate uptime %, correctness %, last-seen timestamp, and successful-recovery count. Team members sign in only to mutate their own row.</p>
+      </div>
+      <div class="tags"><span class="tag tag-spa">SPA</span><span class="tag tag-ok">READ-ALL</span></div>
+    </div>
+
+    <div class="row">
+      <div class="num">03</div>
+      <div class="body">
+        <h3>Admin SPA — team management</h3>
+        <p>Lecturer-only. Assign, enable, and disable teams and their credentials. Force-toggle any team's <code>ready_for_events</code> flag when needed. Separate SPA from the leaderboard so its auth surface is smaller.</p>
+      </div>
+      <div class="tags"><span class="tag tag-spa">SPA</span><span class="tag tag-req">LECTURER</span></div>
+    </div>
+
+    <div class="row">
+      <div class="num">04</div>
+      <div class="body">
+        <h3>Access control — read-all, write-own</h3>
+        <p>Everyone can read. Only the owning team can change their endpoint URL and <code>ready_for_events</code> toggle. Team id + password, bcrypt-hashed. Deliberately simple — <b>no OAuth, no SSO</b>.</p>
+      </div>
+      <div class="tags"><span class="tag tag-svc">POLICY</span><span class="tag tag-ok">bcrypt</span></div>
+    </div>
+
+  </div>
+</div>
+
+<!-- ── Architecture ── -->
+<div class="section">
+  <div class="section-head">
+    <span class="section-label">§02 · Architecture</span>
+    <h2>How it fits together</h2>
+    <span class="role">— one interface, two callers, two stores.</span>
+  </div>
+
+  <div class="diagram-wrap">
+    <div class="mermaid">
+graph LR
+    Lecturer[["👩‍🏫 Lecturer"]]
+    Team[["👥 Student team"]]
+    Public[["🌐 Public viewer"]]
+    Student_EP[["🚀 Student model<br/>on Digital Ocean"]]
+
+    subgraph Platform["platform/"]
+      Admin["Admin SPA<br/>(vanilla HTML+JS)"]
+      Dash["Dashboard SPA<br/>(vanilla HTML+JS)"]
+      API["FastAPI<br/>HTTP wrapper"]
+      Engine["Event engine<br/>(scheduled worker)"]
+      Repo{{"Repository interface<br/>(shared Python module)"}}
+      RegDB[("Registry DB<br/>teams + models")]
+      StatDB[("Status DB<br/>probes + recoveries")]
+    end
+
+    Lecturer -->|manage teams| Admin
+    Team -->|update endpoint / toggle| Dash
+    Public -->|view| Dash
+    Admin --> API
+    Dash --> API
+    API --> Repo
+    Engine -->|imports in-process| Repo
+    Engine -.->|probe every few min| Student_EP
+    Repo --> RegDB
+    Repo --> StatDB
+
+    classDef svc fill:#EAF1F9,stroke:#1F4E8C,color:#16202B;
+    classDef db  fill:#FDF0E0,stroke:#B45309,color:#16202B;
+    classDef ext fill:#FFFFFF,stroke:#7A8699,color:#4A5768;
+    class Admin,Dash,API,Engine,Repo svc;
+    class RegDB,StatDB db;
+    class Lecturer,Team,Public,Student_EP ext;
+    </div>
+  </div>
+</div>
+
+<!-- ── Event engine detail ── -->
+<div class="section">
+  <div class="section-head">
+    <span class="section-label">§03 · Event engine · detail</span>
+    <h2>Probe worker behaviour</h2>
+    <span class="role">— <code class="mono">platform/event-engine/</code></span>
+  </div>
+
+  <div class="detail">
+    <ul>
+      <li>Runs every few minutes. For each model with <code>ready_for_events = true</code>, fires one health inference request to the student's Digital Ocean endpoint.</li>
+      <li><b>Two independent indicators per probe:</b> <b>reachable</b> (did the endpoint respond?) and <b>correct</b> (was the answer right?). Correctness is <code>null</code> when the endpoint is unreachable.</li>
+      <li>Periodically injects <b>drift-inducing traffic</b> to test that students' monitoring + retrain-and-redeploy loop actually fires and recovers.</li>
+      <li>Detects <b>recovery</b> when a run of <code>correct=false</code> is followed by a return to <code>correct=true</code> — or, more strictly, by a change in the student's advertised <code>model_version</code> via <code>GET /version</code>.</li>
+      <li>Appends every result to the Status DB via the shared repository module — <b>no direct file writes</b>. One interface, two callers.</li>
+      <li><b>Student endpoint contract:</b> <code>GET /health</code>, <code>POST /infer</code>, <code>GET /version</code>. Schemas in <code>platform/registry/schemas/</code>.</li>
+    </ul>
+  </div>
+</div>
+
+<!-- ── Data model ── -->
+<div class="section">
+  <div class="section-head">
+    <span class="section-label">§04 · Data</span>
+    <h2>Registry &amp; Status — two file-based stores</h2>
+    <span class="role">— separated so probe history can grow without bloating the registry.</span>
+  </div>
+
+  <div class="two-col">
+    <div class="card">
+      <h3><span class="marker"></span>Registry DB</h3>
+      <ul>
+        <li><b>Teams</b> — <code>team_id</code>, <code>password_hash</code>, <code>enabled</code>, <code>created_at</code></li>
+        <li><b>Models</b> — <code>model_id</code>, <code>owner_team_id</code>, <code>display_name</code>, <code>endpoint_url</code>, <code>ready_for_events</code>, <code>registered_at</code>, <code>updated_at</code></li>
+        <li>Written by admin SPA (teams) and by team members via dashboard (their own model rows)</li>
+        <li>Read by both SPAs and the event engine</li>
+      </ul>
+    </div>
+
+    <div class="card">
+      <h3><span class="marker cond"></span>Status DB</h3>
+      <ul>
+        <li><b>Probes</b> — <code>probe_id</code>, <code>model_id</code>, <code>timestamp</code>, <code>reachable</code>, <code>correct</code>, <code>latency_ms</code>, <code>response_snippet</code>, <code>probe_kind</code></li>
+        <li><b>Recoveries</b> — <code>model_id</code>, <code>detected_at</code>, <code>redeployed_at</code>, <code>new_model_version</code></li>
+        <li>Append-only; written by event engine only</li>
+        <li>Read by the dashboard SPA for the leaderboard timelines</li>
+      </ul>
+    </div>
+
+    <div class="card">
+      <h3><span class="marker purple"></span>Repository interface</h3>
+      <ul>
+        <li><b>teams</b> · <code>create</code>, <code>list</code>, <code>get</code>, <code>set_enabled</code>, <code>verify_password</code>, <code>delete</code></li>
+        <li><b>models</b> · <code>create</code>, <code>list</code>, <code>get</code>, <code>list_by_team</code>, <code>update_endpoint</code>, <code>set_ready</code>, <code>delete</code></li>
+        <li><b>probes</b> · <code>append</code>, <code>list_by_model(since, limit)</code>, <code>aggregate</code></li>
+        <li><b>recoveries</b> · <code>append</code>, <code>list_by_model</code></li>
+      </ul>
+    </div>
+
+    <div class="card">
+      <h3><span class="marker ok"></span>Why separate?</h3>
+      <ul>
+        <li>Probe history grows fast — keep registry small and hot</li>
+        <li>Rotate / prune status independently of team &amp; model rows</li>
+        <li>Swap backend (JSONL → SQLite → Postgres) without touching consumers</li>
+        <li>Clear write-authority boundary: engine only writes Status; SPAs only write Registry</li>
+      </ul>
+    </div>
+  </div>
+</div>
+
+<!-- ── Stack + layout ── -->
+<div class="section">
+  <div class="section-head">
+    <span class="section-label">§05 · Stack &amp; layout</span>
+    <h2>Committed choices</h2>
+    <span class="role">— boring on purpose.</span>
+  </div>
+
+  <div class="two-col">
+    <div class="card">
+      <h3><span class="marker"></span>Stack</h3>
+      <ul>
+        <li><b>Python</b> everywhere on the backend — matches the course</li>
+        <li><b>FastAPI</b> wraps the shared repo module → both SPAs</li>
+        <li>Event engine imports the repo module <b>in-process</b> — one interface, two callers</li>
+        <li>SPAs are <b>vanilla HTML + JS</b>, no build step</li>
+        <li>Alpine.js allowed as an optional sprinkle if reactivity gets painful</li>
+        <li>Password hashing via <b>bcrypt</b> (passlib)</li>
+      </ul>
+    </div>
+
+    <div>
+<pre class="tree"><span class="dir">platform/</span>
+├── <span class="dir">registry/</span>     <span class="note"># repo interface + file impl</span>
+│   └── <span class="dir">schemas/</span>   <span class="note"># JSON Schema for /health, /infer, /version</span>
+├── <span class="dir">event-engine/</span> <span class="note"># scheduled probe worker</span>
+├── <span class="dir">dashboard/</span>    <span class="note"># public SPA (leaderboard)</span>
+├── <span class="dir">admin/</span>        <span class="note"># lecturer SPA</span>
+└── <span class="dir">data/</span>         <span class="note"># gitignored DB files</span>
+    <span class="note">    · registry.jsonl / .db</span>
+    <span class="note">    · status.jsonl   / .db</span></pre>
+    </div>
+  </div>
+</div>
+
+<!-- ── Scope ── -->
+<div class="section">
+  <div class="section-head">
+    <span class="section-label">§06 · Scope</span>
+    <h2>In / out of scope · next steps</h2>
+    <span class="role">— v1 of this tooling.</span>
+  </div>
+
+  <div class="scope-grid">
+    <div class="scope-col in">
+      <h3>In scope · next</h3>
+      <ul>
+        <li>Commit <code>CLAUDE.md</code> on branch <code>v2</code></li>
+        <li>Scaffold <code>platform/</code> skeleton with <code>.gitkeep</code>s</li>
+        <li>Choose file-DB shape (JSONL vs SQLite)</li>
+        <li>Build <code>registry/</code> module first — <b>blocks everything else</b></li>
+        <li>Event engine → FastAPI → dashboard SPA → admin SPA</li>
+        <li>Local <code>make dev</code> bringing up both SPAs + engine + seeded DBs</li>
+      </ul>
+    </div>
+    <div class="scope-col out">
+      <h3>Out of scope · v1</h3>
+      <ul>
+        <li>Cloud hosting / production deploy</li>
+        <li>Real multi-region monitoring</li>
+        <li>Alerting (email, Slack, PagerDuty)</li>
+        <li>Historical rollups — keep everything for now</li>
+        <li>Fancy auth (OAuth, SSO)</li>
+        <li>Deploying <em>anything</em> to Digital Ocean ourselves — <b>students own their endpoints</b></li>
+      </ul>
+    </div>
+  </div>
+</div>
+
+<!-- ── Strategy footer ── -->
+<div class="strategy">
+  <h2>Strategic notes</h2>
+  <p><b>01 · One interface, two callers.</b> The repository module is the only thing that touches the file stores. Both SPAs go through <code>FastAPI</code>; the event engine imports the module directly. Swapping backends later doesn't touch consumers.</p>
+  <p><b>02 · Two indicators, not one.</b> Reachability and correctness are recorded independently every probe. A model that responds with wrong answers is a different failure mode than one that doesn't respond at all — and the leaderboard must show both.</p>
+  <p><b>03 · Drift is injected on purpose.</b> The event engine is not just a health checker; it is a stressor. The point of the exam extension is that students' retrain-and-redeploy loop <em>fires</em>, and we can only score that if we cause it.</p>
+  <p><b>04 · Read-all, write-own.</b> Public read access is the whole point of the leaderboard. Writes are narrow: teams edit their own row, lecturers manage everything. No OAuth, no sessions library — team id + bcrypt password is enough.</p>
+  <p><b>05 · Student-facing artifacts are read-only.</b> <code>README.md</code>, <code>notebooks/**</code>, <code>action.yml</code>, and the student-facing bits of <code>.github/workflows/**</code> stay recognisable to students who forked earlier. All v2 tooling lives under <code>platform/</code>.</p>
+</div>
+
+<footer>ITU SDSE · v2 lecturer tooling · plan overview · 10 July 2026</footer>
+
+</div>
+
+<script>
+  mermaid.initialize({
+    startOnLoad: true,
+    theme: 'base',
+    themeVariables: {
+      background: '#FFFFFF',
+      primaryColor: '#EAF1F9',
+      primaryTextColor: '#16202B',
+      primaryBorderColor: '#1F4E8C',
+      lineColor: '#4A5768',
+      secondaryColor: '#FDF0E0',
+      tertiaryColor: '#FFFFFF',
+      fontFamily: "'IBM Plex Sans', system-ui, sans-serif",
+      fontSize: '14px'
+    },
+    flowchart: { htmlLabels: true, curve: 'basis', padding: 20, useMaxWidth: true, nodeSpacing: 55, rankSpacing: 80 }
+  });
+</script>
+</body>
+</html>

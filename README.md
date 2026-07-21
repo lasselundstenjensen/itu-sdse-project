@@ -1,4 +1,12 @@
-# ITU BDS MLOPS'25 - Project
+# ITU BDS MLOPS'26 - Project (V2)
+
+## v2 — lecturer tooling (work in progress)
+
+The `v2` branch adds a grading harness: an event engine probes each team's deployed inference endpoint every few minutes for **reachability** and **correctness**, and renders the results as a Claude-Status-style leaderboard. Teams register and edit their endpoint from the dashboard itself using a token issued by the lecturer.
+
+**→ [`docs/v2-dashboard.md`](./docs/v2-dashboard.md)** — dashboard walkthrough (row anatomy, colour semantics, register &amp; edit flow, API surface, mock tokens).
+
+Also worth reading: [`platform/README.md`](./platform/README.md) for how to run the mock locally, [`CLAUDE.md`](./CLAUDE.md) for the full v2 plan, and [`CLARIFY.md`](./CLARIFY.md) for the open questions.
 
 ## Task
 
