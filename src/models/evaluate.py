@@ -6,7 +6,7 @@ Includes accuracy, confusion matrix, classification report, and tensor handling.
 """
 
 import sys
-from typing import Any, Literal, Tuple
+from typing import Any, Literal, Tuple, Union
 
 import numpy as np
 import pandas as pd
@@ -95,8 +95,8 @@ def get_predictions(
 
 
 def calculate_accuracy(
-    y_true: pd.Series | list | Any,
-    y_pred: pd.Series | list | Any,
+    y_true: Union[pd.Series, list, Any],
+    y_pred: Union[pd.Series, list, Any],
 ) -> float:
     """
     Calculate accuracy score.
@@ -117,8 +117,8 @@ def calculate_accuracy(
 
 
 def get_confusion_matrix(
-    y_true: pd.Series | list | Any,
-    y_pred: pd.Series | list | Any,
+    y_true: Union[pd.Series, list, Any],
+    y_pred: Union[pd.Series, list, Any],
 ) -> pd.DataFrame:
     """
     Get confusion matrix as a DataFrame.
@@ -144,10 +144,10 @@ def get_confusion_matrix(
 
 
 def get_classification_report(
-    y_true: pd.Series | list | Any,
-    y_pred: pd.Series | list | Any,
+    y_true: Union[pd.Series, list, Any],
+    y_pred: Union[pd.Series, list, Any],
     output_dict: bool = False,
-) -> dict | str:
+) -> Union[dict, str]:
     """
     Get classification report.
 
@@ -169,8 +169,8 @@ def get_classification_report(
 
 
 def print_confusion_matrix_crosstab(
-    y_true: pd.Series | list | Any,
-    y_pred: pd.Series | list | Any,
+    y_true: Union[pd.Series, list, Any],
+    y_pred: Union[pd.Series, list, Any],
     dataset_name: str = "",
 ) -> None:
     """
@@ -197,8 +197,8 @@ def print_confusion_matrix_crosstab(
 
 
 def print_classification_report(
-    y_true: pd.Series | list | Any,
-    y_pred: pd.Series | list | Any,
+    y_true: Union[pd.Series, list, Any],
+    y_pred: Union[pd.Series, list, Any],
     dataset_name: str = "",
 ) -> None:
     """
@@ -220,8 +220,8 @@ def print_classification_report(
 
 
 def evaluate_model(
-    y_true: pd.Series | list | Any,
-    y_pred: pd.Series | list | Any,
+    y_true: Union[pd.Series, list, Any],
+    y_pred: Union[pd.Series, list, Any],
     dataset_name: str = "",
     print_crosstab: bool = True,
     print_report: bool = True,
@@ -328,8 +328,8 @@ def evaluate_both_datasets(
 
 
 def plot_confusion_matrix(
-    y_true: pd.Series | list | Any,
-    y_pred: pd.Series | list | Any,
+    y_true: Union[pd.Series, list, Any],
+    y_pred: Union[pd.Series, list, Any],
     class_names: dict = None,
     title: str = "Confusion Matrix",
 ) -> None:

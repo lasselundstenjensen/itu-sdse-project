@@ -11,6 +11,7 @@ import sys
 from pathlib import Path
 from typing import Dict, List, Tuple
 
+import pandas as pd
 import mlflow
 import mlflow.pytorch
 import numpy as np
@@ -19,6 +20,9 @@ import torch.nn as nn
 import torch.optim as optim
 from mlflow.tracking.client import MlflowClient
 from mlflow.entities.model_registry.model_version_status import ModelVersionStatus
+from sklearn.linear_model import LogisticRegression
+from sklearn.model_selection import RandomizedSearchCV
+from xgboost import XGBRFClassifier
 from sklearn.metrics import (
     accuracy_score, 
     classification_report, 
@@ -28,6 +32,8 @@ from sklearn.metrics import (
     recall_score,
     roc_auc_score
 )
+from scipy.stats import uniform, randint
+import joblib
 from torch.utils.data import DataLoader
 
 from ..config import (
@@ -44,8 +50,11 @@ from ..config import (
     RANDOM_STATE,
     THRESHOLD,
 )
+
+# Define paths for tabular models (kept for backward compatibility)
+XGBOOST_MODEL_PATH = ARTIFACT_DIR / "xgboost_model.json"
+LR_MODEL_PATH = ARTIFACT_DIR / "logistic_regression_model.pkl"
 from ..utils import (
-    get_predictions,
     print_section_header,
     tensor_to_numpy,
 )
@@ -135,6 +144,11 @@ def setup_mlflow() -> str:
         The experiment name that was set.
     """
     print(f"Setting up MLflow experiment: {EXPERIMENT_NAME}")
+
+    # End any active runs to avoid conflicts
+    if mlflow.active_run():
+        mlflow.end_run()
+        print("Ended previous active MLflow run")
 
     # Ensure directories exist
     ARTIFACT_DIR.mkdir(parents=True, exist_ok=True)
@@ -808,7 +822,7 @@ def save_model_artifacts(
     torch.save({
         'model_state_dict': model.state_dict(),
         'architecture': SimpleCNN.__name__,
-        'input_shape': (3, 64, 64),  # RGB 64x64 images
+        'input_shape': (3, 224, 224),  # RGB 224x224 images
         'output_shape': (1,),  # Binary classification
         'threshold': threshold,
         'num_classes': NUM_CLASSES,
@@ -869,7 +883,7 @@ def train_models(
     mlflow.log_param("learning_rate", LEARNING_RATE)
     mlflow.log_param("initial_threshold", THRESHOLD)
     mlflow.log_param("num_classes", NUM_CLASSES)
-    mlflow.log_param("image_size", "64x64")
+    mlflow.log_param("image_size", "224x224")
     mlflow.log_param("random_seed", RANDOM_STATE)
 
     # Log model architecture details
@@ -878,6 +892,11 @@ def train_models(
     mlflow.log_param("total_parameters", model_params)
     mlflow.log_param("trainable_parameters", trainable_params)
 
+    # End any active runs before starting a new one
+    if mlflow.active_run():
+        mlflow.end_run()
+        print("Ended active MLflow run before starting new one")
+    
     # Start MLflow run
     with mlflow.start_run() as run:
         # Train CNN model
