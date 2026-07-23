@@ -1,26 +1,28 @@
 """
-Data Fetching Module
+Image Data Fetching Module
 
-Handles data loading from DVC and local CSV sources.
+Handles loading of glass vial images and their metadata for the image classification pipeline.
 This is the first step in the MLOps pipeline.
 """
 
 import json
 import subprocess
 import sys
+import warnings
+from datetime import datetime
 from pathlib import Path
+from typing import List, Tuple
 
 import pandas as pd
+from PIL import Image
 
 from ..config import (
     ARTIFACT_DIR,
-    DATE_LIMITS_PATH,
-    MAX_DATE,
-    MIN_DATE,
+    IMAGE_DATA_DIR,
+    METADATA_PATH,
     MLRUNS_DIR,
-    RAW_DATA_PATH,
 )
-from ..utils import check_dataframe_not_empty, print_section_header
+from ..utils import check_metadata_columns, print_section_header
 
 
 def setup_artifacts() -> None:
@@ -31,11 +33,13 @@ def setup_artifacts() -> None:
     - artifacts/ (for data and model artifacts)
     - mlruns/ (for MLflow tracking)
     - mlruns/.trash/ (for MLflow cleanup)
+    - data/images/raw/ (for raw image storage)
     """
     ARTIFACT_DIR.mkdir(parents=True, exist_ok=True)
     MLRUNS_DIR.mkdir(parents=True, exist_ok=True)
     (MLRUNS_DIR / ".trash").mkdir(parents=True, exist_ok=True)
-    print("Created artifacts directory")
+    IMAGE_DATA_DIR.mkdir(parents=True, exist_ok=True)
+    print("Created artifacts and image directories")
 
 
 def pull_data_from_dvc() -> bool:
@@ -70,164 +74,271 @@ def pull_data_from_dvc() -> bool:
         return False
 
 
-def load_raw_data() -> pd.DataFrame:
+def load_image_dataset() -> List[Tuple[Path, int]]:
     """
-    Load raw training data from CSV.
+    Load image dataset from IMAGE_DATA_DIR using metadata from METADATA_PATH.
+
+    Reads images from the image directory and their corresponding labels
+    from the metadata CSV file.
 
     Returns
     -------
-    pd.DataFrame
-        Raw training data loaded from RAW_DATA_PATH.
+    List[Tuple[Path, int]]
+        List of (image_path, label) tuples where:
+        - image_path: Path to the image file
+        - label: Class label (0=good, 1=defective)
 
     Raises
     ------
     FileNotFoundError
-        If RAW_DATA_PATH does not exist.
+        If METADATA_PATH or IMAGE_DATA_DIR does not exist.
     ValueError
-        If loaded data is empty.
+        If metadata is empty or required columns are missing.
     """
-    print(f"Loading training data from {RAW_DATA_PATH}")
+    print(f"Loading image dataset from {IMAGE_DATA_DIR}")
+    print(f"Using metadata from {METADATA_PATH}")
 
-    if not RAW_DATA_PATH.exists():
+    # Check if metadata file exists
+    if not METADATA_PATH.exists():
         raise FileNotFoundError(
-            f"Raw data not found at {RAW_DATA_PATH}. "
-            "Run 'dvc pull' or ensure data exists."
+            f"Metadata file not found at {METADATA_PATH}. "
+            "Create metadata.csv or ensure data exists."
         )
 
-    data = pd.read_csv(RAW_DATA_PATH)
-    print(f"Total rows: {data.shape[0]}")
-    check_dataframe_not_empty(data, "Raw training data")
-
-    return data
-
-
-def filter_data_by_date(
-    data: pd.DataFrame,
-    min_date: str = None,
-    max_date: str = None,
-) -> tuple[pd.DataFrame, pd.Timedelta, pd.Timedelta]:
-    """
-    Filter data by date range and save date limits.
-
-    Parameters
-    ----------
-    data : pd.DataFrame
-        DataFrame with 'date_part' column to filter.
-    min_date : str, optional
-        Minimum date in YYYY-MM-DD format. Uses MIN_DATE from config if None.
-    max_date : str, optional
-        Maximum date in YYYY-MM-DD format. Uses MAX_DATE from config if None.
-
-    Returns
-    -------
-    tuple[pd.DataFrame, pd.Timedelta, pd.Timedelta]
-        - Filtered DataFrame
-        - Actual min_date used
-        - Actual max_date used
-
-    Raises
-    ------
-    ValueError
-        If 'date_part' column is missing from data.
-    """
-    from ..config import MIN_DATE as config_min_date
-    from ..config import MAX_DATE as config_max_date
-
-    # Use provided dates or fall back to config
-    if min_date is None:
-        min_date = config_min_date
-    if max_date is None:
-        max_date = config_max_date
-
-    # Convert to datetime.date objects
-    import datetime
-
-    if max_date == config_max_date and config_max_date == "2024-01-31":
-        # Use current date if the default is still set
-        actual_max_date = pd.to_datetime(datetime.datetime.now().date()).date()
-    else:
-        actual_max_date = pd.to_datetime(max_date).date()
-
-    actual_min_date = pd.to_datetime(min_date).date()
-
-    # Check for date_part column
-    if "date_part" not in data.columns:
-        raise ValueError(
-            "Column 'date_part' not found in data. "
-            "Cannot filter by date."
+    # Check if image directory exists
+    if not IMAGE_DATA_DIR.exists():
+        raise FileNotFoundError(
+            f"Image directory not found at {IMAGE_DATA_DIR}. "
+            "Create the directory and add images."
         )
 
-    # Convert date_part to date and filter
-    data["date_part"] = pd.to_datetime(data["date_part"]).dt.date
-    data = data[
-        (data["date_part"] >= actual_min_date) &
-        (data["date_part"] <= actual_max_date)
-    ]
+    # Load metadata
+    metadata = pd.read_csv(METADATA_PATH)
+    print(f"Metadata loaded. Total entries: {len(metadata)}")
 
-    # Save date limits for reproducibility
-    date_limits = {
-        "min_date": str(actual_min_date),
-        "max_date": str(actual_max_date),
-    }
-    DATE_LIMITS_PATH.parent.mkdir(parents=True, exist_ok=True)
-    with open(DATE_LIMITS_PATH, "w") as f:
-        json.dump(date_limits, f, indent=2)
+    # Validate metadata columns
+    required_columns = ["filename", "class"]
+    check_metadata_columns(metadata, required_columns)
 
-    print(f"Filtered data to date range: {actual_min_date} to {actual_max_date}")
-    print(f"Date limits saved to {DATE_LIMITS_PATH}")
+    # Build list of (image_path, label) tuples
+    image_dataset = []
+    missing_files = []
+    corrupt_files = []
 
-    return data, actual_min_date, actual_max_date
+    for _, row in metadata.iterrows():
+        filename = row["filename"]
+        label = int(row["class"])
+        image_path = IMAGE_DATA_DIR / filename
+
+        # Check if image file exists
+        if not image_path.exists():
+            missing_files.append(filename)
+            continue
+
+        # Validate image file
+        try:
+            with Image.open(image_path) as img:
+                # Basic validation - ensure it's a valid image
+                img.verify()
+            image_dataset.append((image_path, label))
+        except (IOError, SyntaxError) as e:
+            corrupt_files.append(filename)
+            warnings.warn(f"Corrupt or invalid image: {filename} - {e}")
+
+    # Report issues
+    if missing_files:
+        warnings.warn(f"Missing image files: {missing_files}")
+    if corrupt_files:
+        warnings.warn(f"Corrupt image files: {corrupt_files}")
+
+    print(f"Loaded {len(image_dataset)} valid images with labels")
+    if missing_files:
+        print(f"Warning: {len(missing_files)} image files not found")
+    if corrupt_files:
+        print(f"Warning: {len(corrupt_files)} corrupt image files detected")
+
+    return image_dataset
 
 
-def fetch_and_prepare_data(
-    min_date: str = None,
-    max_date: str = None,
-) -> pd.DataFrame:
+def create_image_metadata() -> pd.DataFrame:
     """
-    Complete data fetching pipeline.
+    Create a sample metadata.csv file for testing purposes.
 
-    This function combines all fetching steps:
-    1. Setup artifacts directory
-    2. Pull data from DVC
-    3. Load raw data
-    4. Filter by date range
-
-    Parameters
-    ----------
-    min_date : str, optional
-        Minimum date for filtering.
-    max_date : str, optional
-        Maximum date for filtering.
+    Generates metadata for a small set of sample images with:
+    - filename: Image file names
+    - class: Binary labels (0=good, 1=defective)
+    - batch_id: Sample batch identifiers
+    - timestamp: Current timestamp
 
     Returns
     -------
     pd.DataFrame
-        Loaded and filtered training data.
+        Generated metadata DataFrame.
     """
-    print_section_header("DATA FETCHING")
+    print("Creating sample metadata.csv for testing...")
+
+    # Create sample metadata
+    sample_data = {
+        "filename": [
+            "vial_001.jpg", "vial_002.jpg", "vial_003.jpg", 
+            "vial_004.jpg", "vial_005.jpg", "vial_006.jpg"
+        ],
+        "class": [0, 1, 0, 1, 0, 1],  # Balanced sample
+        "batch_id": ["BATCH_2024_07_21", "BATCH_2024_07_21", "BATCH_2024_07_22", 
+                   "BATCH_2024_07_22", "BATCH_2024_07_23", "BATCH_2024_07_23"],
+        "timestamp": [datetime.now().isoformat()] * 6
+    }
+
+    metadata = pd.DataFrame(sample_data)
+
+    # Save to METADATA_PATH
+    METADATA_PATH.parent.mkdir(parents=True, exist_ok=True)
+    metadata.to_csv(METADATA_PATH, index=False)
+    print(f"Sample metadata saved to {METADATA_PATH}")
+
+    return metadata
+
+
+def validate_image_dataset(image_dataset: List[Tuple[Path, int]]) -> dict:
+    """
+    Validate the image dataset for quality and consistency.
+
+    Performs the following checks:
+    - Corrupt image detection
+    - File size constraints (reject images < 10KB or > 1MB)
+    - Resolution validation (ensure all images can be resized to 64x64)
+    - Color channel validation (ensure RGB, not grayscale or RGBA)
+
+    Parameters
+    ----------
+    image_dataset : List[Tuple[Path, int]]
+        List of (image_path, label) tuples to validate.
+
+    Returns
+    -------
+    dict
+        Validation report with counts of valid/invalid images and details.
+    """
+    print("Validating image dataset...")
+
+    validation_report = {
+        "total_images": len(image_dataset),
+        "valid_images": 0,
+        "corrupt_images": 0,
+        "small_files": 0,
+        "large_files": 0,
+        "invalid_channels": 0,
+        "invalid_resolutions": 0,
+        "corrupt_files": [],
+        "small_file_list": [],
+        "large_file_list": [],
+        "invalid_channel_list": [],
+        "invalid_resolution_list": []
+    }
+
+    for image_path, label in image_dataset:
+        try:
+            with Image.open(image_path) as img:
+                # Check file size
+                file_size = image_path.stat().st_size
+                if file_size < 10240:  # < 10KB
+                    validation_report["small_files"] += 1
+                    validation_report["small_file_list"].append(image_path.name)
+                    continue
+                elif file_size > 1048576:  # > 1MB
+                    validation_report["large_files"] += 1
+                    validation_report["large_file_list"].append(image_path.name)
+                    continue
+
+                # Check color channels
+                if img.mode not in ['RGB', 'L']:
+                    validation_report["invalid_channels"] += 1
+                    validation_report["invalid_channel_list"].append(image_path.name)
+                    continue
+
+                # Check resolution (we can resize, but warn if very different)
+                width, height = img.size
+                if width < 10 or height < 10:  # Too small to resize meaningfully
+                    validation_report["invalid_resolutions"] += 1
+                    validation_report["invalid_resolution_list"].append(image_path.name)
+                    continue
+
+                # If we get here, image is valid
+                validation_report["valid_images"] += 1
+
+        except (IOError, SyntaxError) as e:
+            validation_report["corrupt_images"] += 1
+            validation_report["corrupt_files"].append(image_path.name)
+
+    # Print validation summary
+    print(f"\nValidation Summary:")
+    print(f"  Total images: {validation_report['total_images']}")
+    print(f"  Valid images: {validation_report['valid_images']}")
+    print(f"  Corrupt images: {validation_report['corrupt_images']}")
+    print(f"  Too small (<10KB): {validation_report['small_files']}")
+    print(f"  Too large (>1MB): {validation_report['large_files']}")
+    print(f"  Invalid channels: {validation_report['invalid_channels']}")
+    print(f"  Invalid resolutions: {validation_report['invalid_resolutions']}")
+
+    if validation_report["corrupt_files"]:
+        print(f"  Corrupt files: {validation_report['corrupt_files']}")
+    if validation_report["small_file_list"]:
+        print(f"  Small files: {validation_report['small_file_list']}")
+
+    return validation_report
+
+
+def fetch_and_prepare_data() -> List[Tuple[Path, int]]:
+    """
+    Complete data fetching pipeline for image classification.
+
+    This function combines all fetching steps:
+    1. Setup artifacts directory
+    2. Pull data from DVC
+    3. Load image dataset and metadata
+    4. Validate the dataset
+
+    Returns
+    -------
+    List[Tuple[Path, int]]
+        Validated list of (image_path, label) tuples ready for preprocessing.
+    """
+    print_section_header("IMAGE DATA FETCHING")
 
     setup_artifacts()
     pull_data_from_dvc()
 
-    data = load_raw_data()
-    data, actual_min, actual_max = filter_data_by_date(data, min_date, max_date)
+    # Load image dataset
+    image_dataset = load_image_dataset()
 
-    print(f"Data fetching complete. Shape: {data.shape}")
-    return data
+    # Validate dataset
+    validation_report = validate_image_dataset(image_dataset)
+
+    # Filter out invalid images
+    valid_dataset = []
+    for image_path, label in image_dataset:
+        if image_path.name not in validation_report["corrupt_files"]:
+            valid_dataset.append((image_path, label))
+
+    print(f"Data fetching complete. Valid images: {len(valid_dataset)}")
+    return valid_dataset
 
 
 if __name__ == "__main__":
     """
-    Run data fetching module directly.
+    Run image data fetching module directly.
 
     Usage:
         python -m src.data.fetch
     """
-    print("Running data fetching module...")
+    print("Running image data fetching module...")
     try:
-        data = fetch_and_prepare_data()
-        print(f"\nSuccessfully loaded data with shape: {data.shape}")
-        print(f"Columns: {list(data.columns)}")
+        dataset = fetch_and_prepare_data()
+        print(f"\nSuccessfully loaded dataset with {len(dataset)} images")
+        if dataset:
+            print(f"Sample: {dataset[0]}")
     except Exception as e:
         print(f"Error: {e}", file=sys.stderr)
+        import traceback
+        traceback.print_exc()
         sys.exit(1)

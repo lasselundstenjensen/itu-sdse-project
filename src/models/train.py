@@ -1,47 +1,131 @@
 """
 Model Training Module
 
-Handles training of machine learning models including XGBoost and Logistic Regression.
-Includes hyperparameter tuning with RandomizedSearchCV and MLflow integration.
+Handles training of PyTorch CNN model for glass vial image classification.
+Includes training loop, evaluation, threshold tuning, and MLflow integration.
 """
 
 import json
 import subprocess
 import sys
 from pathlib import Path
+from typing import Dict, List, Tuple
 
-import joblib
 import mlflow
-import mlflow.pyfunc
-import mlflow.sklearn
+import mlflow.pytorch
 import numpy as np
-import pandas as pd
+import torch
+import torch.nn as nn
+import torch.optim as optim
 from mlflow.tracking.client import MlflowClient
 from mlflow.entities.model_registry.model_version_status import ModelVersionStatus
-from sklearn.linear_model import LogisticRegression
-from sklearn.model_selection import RandomizedSearchCV, train_test_split
-from sklearn.metrics import accuracy_score, classification_report, f1_score
-from scipy.stats import randint, uniform
-from xgboost import XGBRFClassifier
+from sklearn.metrics import (
+    accuracy_score, 
+    classification_report, 
+    confusion_matrix,
+    f1_score, 
+    precision_score, 
+    recall_score,
+    roc_auc_score
+)
+from torch.utils.data import DataLoader
 
 from ..config import (
     ARTIFACT_DIR,
-    COLUMNS_LIST_PATH,
+    ARTIFACT_PATH,
+    BATCH_SIZE,
+    DEVICE,
     EXPERIMENT_NAME,
-    LR_MODEL_PATH,
-    MODEL_RESULTS_PATH,
+    LEARNING_RATE,
+    MODEL_NAME,
+    NUM_CLASSES,
+    NUM_EPOCHS,
+    PYTORCH_MODEL_PATH,
     RANDOM_STATE,
-    TEST_SIZE,
-    TRAIN_DATA_GOLD_PATH,
-    XGBOOST_MODEL_PATH,
+    THRESHOLD,
 )
-from ..data.features import bin_categorical_columns
-from ..utils import create_dummy_cols, print_section_header
+from ..utils import (
+    get_predictions,
+    print_section_header,
+    tensor_to_numpy,
+)
+from .evaluate import (
+    get_confusion_matrix,
+    get_classification_report,
+    calculate_accuracy,
+)
+
+
+# =============================================================================
+# MODEL ARCHITECTURE
+# =============================================================================
+
+class SimpleCNN(nn.Module):
+    """
+    Simple CNN model for binary classification of glass vial images.
+    
+    Architecture:
+    - 3 convolutional layers with max pooling
+    - 2 fully connected layers with dropout
+    - Sigmoid output for binary classification
+    
+    Input: 64x64 RGB images (3 channels)
+    Output: Single value (0-1) representing probability of class 0 (good)
+    """
+
+    def __init__(self):
+        super(SimpleCNN, self).__init__()
+        # Convolutional layers
+        self.conv1 = nn.Conv2d(3, 32, kernel_size=3, stride=1, padding=1)
+        self.conv2 = nn.Conv2d(32, 64, kernel_size=3, stride=1, padding=1)
+        self.conv3 = nn.Conv2d(64, 128, kernel_size=3, stride=1, padding=1)
+        
+        # Max pooling
+        self.pool = nn.MaxPool2d(kernel_size=2, stride=2)
+        
+        # Fully connected layers
+        # After 3 max pooling layers: 64x64 -> 32x32 -> 16x16 -> 8x8
+        self.fc1 = nn.Linear(128 * 8 * 8, 512)
+        self.fc2 = nn.Linear(512, 1)
+        
+        # Activation and regularization
+        self.relu = nn.ReLU()
+        self.dropout = nn.Dropout(0.5)
+        self.sigmoid = nn.Sigmoid()
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """
+        Forward pass of the CNN.
+        
+        Parameters
+        ----------
+        x : torch.Tensor
+            Input tensor of shape (batch_size, 3, 64, 64)
+            
+        Returns
+        -------
+        torch.Tensor
+            Output tensor of shape (batch_size, 1) with values in [0, 1]
+        """
+        # Convolutional layers with ReLU and max pooling
+        x = self.pool(self.relu(self.conv1(x)))
+        x = self.pool(self.relu(self.conv2(x)))
+        x = self.pool(self.relu(self.conv3(x)))
+        
+        # Flatten for fully connected layers
+        x = x.view(-1, 128 * 8 * 8)
+        
+        # Fully connected layers
+        x = self.relu(self.fc1(x))
+        x = self.dropout(x)
+        x = self.sigmoid(self.fc2(x))
+        
+        return x
 
 
 def setup_mlflow() -> str:
     """
-    Setup MLflow experiment and directories.
+    Setup MLflow experiment and directories for PyTorch CNN training.
 
     Creates necessary directories and sets the active experiment.
 
@@ -67,130 +151,379 @@ def setup_mlflow() -> str:
     return EXPERIMENT_NAME
 
 
-def load_training_data() -> pd.DataFrame:
+# =============================================================================
+# CNN TRAINING FUNCTIONS
+# =============================================================================
+
+def train_cnn_model(
+    train_loader: DataLoader,
+    val_loader: DataLoader,
+    num_epochs: int = NUM_EPOCHS,
+    learning_rate: float = LEARNING_RATE,
+    device: torch.device = DEVICE,
+    random_seed: int = RANDOM_STATE,
+) -> Tuple[SimpleCNN, Dict]:
     """
-    Load preprocessed training data from the gold dataset.
-
-    Returns
-    -------
-    pd.DataFrame
-        Training data ready for model preparation.
-
-    Raises
-    ------
-    FileNotFoundError
-        If training data file does not exist.
-    """
-    print(f"Loading training data from {TRAIN_DATA_GOLD_PATH}")
-
-    if not TRAIN_DATA_GOLD_PATH.exists():
-        raise FileNotFoundError(
-            f"Training data not found at {TRAIN_DATA_GOLD_PATH}. "
-            "Run data pipeline first."
-        )
-
-    data = pd.read_csv(TRAIN_DATA_GOLD_PATH)
-    print(f"Training data loaded. Shape: {data.shape}")
-    return data
-
-
-def prepare_data_for_training(data: pd.DataFrame) -> pd.DataFrame:
-    """
-    Prepare data for model training by creating dummy variables.
-
-    Drops ID columns, identifies categorical columns, creates one-hot encoding,
-    and converts all columns to float64.
+    Train the SimpleCNN model on glass vial images.
 
     Parameters
     ----------
-    data : pd.DataFrame
-        Preprocessed data with both categorical and continuous columns.
-
-    Returns
-    -------
-    pd.DataFrame
-        Data ready for model training (all float64, with dummy variables).
-    """
-    print("\nPreparing data for training...")
-
-    # Drop columns not needed for training
-    drop_cols = ["lead_id", "customer_code", "date_part"]
-    data = data.drop([col for col in drop_cols if col in data.columns], axis=1)
-
-    # Identify categorical columns
-    cat_cols = ["customer_group", "onboarding", "bin_source", "source"]
-    cat_cols = [col for col in cat_cols if col in data.columns]
-
-    if cat_cols:
-        cat_vars = data[cat_cols]
-        other_vars = data.drop(cat_cols, axis=1)
-
-        # Create dummy variables
-        print("Creating dummy variables for categorical columns...")
-        for col in cat_vars.columns:
-            cat_vars[col] = cat_vars[col].astype("category")
-            cat_vars = create_dummy_cols(cat_vars, col)
-            print(f"  Created dummies for: {col}")
-
-        data = pd.concat([other_vars, cat_vars], axis=1)
-    else:
-        other_vars = data
-
-    # Convert all to float64
-    for col in data.columns:
-        data[col] = data[col].astype("float64")
-
-    print(f"Data prepared for training. Shape: {data.shape}")
-    return data
-
-
-def split_data(
-    data: pd.DataFrame,
-    target_col: str = "lead_indicator",
-    test_size: float = TEST_SIZE,
-    random_state: int = RANDOM_STATE,
-) -> tuple[pd.DataFrame, pd.DataFrame, pd.Series, pd.Series]:
-    """
-    Split data into training and test sets.
-
-    Uses stratified splitting to maintain class distribution.
-
-    Parameters
-    ----------
-    data : pd.DataFrame
-        Data with features and target.
-    target_col : str, default="lead_indicator"
-        Name of the target column.
-    test_size : float, default=TEST_SIZE from config
-        Proportion of data to use for testing.
-    random_state : int, default=RANDOM_STATE from config
+    train_loader : DataLoader
+        Training DataLoader with image batches and labels.
+    val_loader : DataLoader
+        Validation DataLoader for monitoring performance.
+    num_epochs : int, default=NUM_EPOCHS from config
+        Number of training epochs.
+    learning_rate : float, default=LEARNING_RATE from config
+        Learning rate for Adam optimizer.
+    device : torch.device, default=DEVICE from config
+        Device to use for training (cuda or cpu).
+    random_seed : int, default=RANDOM_STATE from config
         Random seed for reproducibility.
 
     Returns
     -------
-    tuple[pd.DataFrame, pd.DataFrame, pd.Series, pd.Series]
-        - X_train: Training features
-        - X_test: Test features
-        - y_train: Training targets
-        - y_test: Test targets
+    Tuple[SimpleCNN, Dict]
+        - Trained SimpleCNN model
+        - Training history with metrics per epoch
     """
-    print(f"\nSplitting data (test_size={test_size}, random_state={random_state})...")
+    print(f"\n{'='*60}")
+    print("TRAINING CNN MODEL")
+    print(f"{'='*60}")
+    print(f"Device: {device}")
+    print(f"Epochs: {num_epochs}")
+    print(f"Learning rate: {learning_rate}")
+    print(f"Train batches: {len(train_loader)}")
+    print(f"Val batches: {len(val_loader)}")
 
-    if target_col not in data.columns:
-        raise ValueError(f"Target column '{target_col}' not found in data.")
+    # Set seeds for reproducibility
+    torch.manual_seed(random_seed)
+    np.random.seed(random_seed)
 
-    y = data[target_col]
-    X = data.drop([target_col], axis=1)
+    # Initialize model, loss function, and optimizer
+    model = SimpleCNN().to(device)
+    
+    # Use Binary Cross Entropy loss for binary classification
+    criterion = nn.BCELoss()
+    
+    # Use Adam optimizer
+    optimizer = optim.Adam(model.parameters(), lr=learning_rate)
 
-    X_train, X_test, y_train, y_test = train_test_split(
-        X, y,
-        random_state=random_state,
-        test_size=test_size,
-        stratify=y,
-    )
+    # Training history
+    history = {
+        'train_loss': [],
+        'val_loss': [],
+        'train_accuracy': [],
+        'val_accuracy': [],
+        'train_f1': [],
+        'val_f1': [],
+        'best_val_f1': 0.0,
+        'best_model_state': None,
+    }
 
-    print(f"Train shape: {X_train.shape}, Test shape: {X_test.shape}")
-    return X_train, X_test, y_train, y_test
+    print(f"\nStarting training...")
+
+    for epoch in range(num_epochs):
+        # Training phase
+        model.train()
+        train_running_loss = 0.0
+        train_correct = 0
+        train_total = 0
+        all_train_preds = []
+        all_train_labels = []
+
+        for batch_idx, (images, labels) in enumerate(train_loader):
+            # Move data to device
+            images = images.to(device)
+            labels = labels.float().to(device).view(-1, 1)
+
+            # Forward pass
+            outputs = model(images)
+            loss = criterion(outputs, labels)
+
+            # Backward pass and optimize
+            optimizer.zero_grad()
+            loss.backward()
+            optimizer.step()
+
+            # Calculate metrics
+            train_running_loss += loss.item()
+            predicted = (outputs >= THRESHOLD).float().view(-1)
+            train_total += labels.size(0)
+            train_correct += (predicted == labels.view(-1)).sum().item()
+
+            # Store predictions and labels for F1 calculation
+            all_train_preds.extend(predicted.cpu().numpy())
+            all_train_labels.extend(labels.cpu().numpy())
+
+        # Calculate epoch metrics
+        epoch_train_loss = train_running_loss / len(train_loader)
+        epoch_train_accuracy = train_correct / train_total
+        epoch_train_f1 = f1_score(all_train_labels, all_train_preds, average='binary')
+
+        # Validation phase
+        model.eval()
+        val_running_loss = 0.0
+        val_correct = 0
+        val_total = 0
+        all_val_preds = []
+        all_val_labels = []
+
+        with torch.no_grad():
+            for images, labels in val_loader:
+                images = images.to(device)
+                labels = labels.float().to(device).view(-1, 1)
+
+                outputs = model(images)
+                loss = criterion(outputs, labels)
+
+                val_running_loss += loss.item()
+                predicted = (outputs >= THRESHOLD).float().view(-1)
+                val_total += labels.size(0)
+                val_correct += (predicted == labels.view(-1)).sum().item()
+
+                all_val_preds.extend(predicted.cpu().numpy())
+                all_val_labels.extend(labels.cpu().numpy())
+
+        # Calculate validation metrics
+        epoch_val_loss = val_running_loss / len(val_loader)
+        epoch_val_accuracy = val_correct / val_total
+        epoch_val_f1 = f1_score(all_val_labels, all_val_preds, average='binary')
+
+        # Store metrics
+        history['train_loss'].append(epoch_train_loss)
+        history['val_loss'].append(epoch_val_loss)
+        history['train_accuracy'].append(epoch_train_accuracy)
+        history['val_accuracy'].append(epoch_val_accuracy)
+        history['train_f1'].append(epoch_train_f1)
+        history['val_f1'].append(epoch_val_f1)
+
+        # Save best model based on validation F1 score
+        if epoch_val_f1 > history['best_val_f1']:
+            history['best_val_f1'] = epoch_val_f1
+            history['best_model_state'] = model.state_dict().copy()
+
+        # Print epoch results
+        print(f"Epoch [{epoch+1}/{num_epochs}]:")
+        print(f"  Train Loss: {epoch_train_loss:.4f} | Train Acc: {epoch_train_accuracy:.4f} | Train F1: {epoch_train_f1:.4f}")
+        print(f"  Val Loss: {epoch_val_loss:.4f} | Val Acc: {epoch_val_accuracy:.4f} | Val F1: {epoch_val_f1:.4f}")
+
+        # Log to MLflow
+        mlflow.log_metric("train_loss", epoch_train_loss, step=epoch)
+        mlflow.log_metric("val_loss", epoch_val_loss, step=epoch)
+        mlflow.log_metric("train_accuracy", epoch_train_accuracy, step=epoch)
+        mlflow.log_metric("val_accuracy", epoch_val_accuracy, step=epoch)
+        mlflow.log_metric("train_f1_score", epoch_train_f1, step=epoch)
+        mlflow.log_metric("val_f1_score", epoch_val_f1, step=epoch)
+
+    # Load best model weights
+    if history['best_model_state'] is not None:
+        model.load_state_dict(history['best_model_state'])
+        print(f"\nRestored best model weights (best val F1: {history['best_val_f1']:.4f})")
+
+    print(f"\nTraining complete!")
+    print(f"Best validation F1-score: {history['best_val_f1']:.4f}")
+
+    return model, history
+
+
+def evaluate_cnn_model(
+    model: SimpleCNN,
+    test_loader: DataLoader,
+    device: torch.device = DEVICE,
+    threshold: float = THRESHOLD,
+) -> Dict:
+    """
+    Evaluate CNN model on test dataset.
+
+    Computes comprehensive metrics: accuracy, F1-score, precision, recall, ROC-AUC.
+    Generates confusion matrix and classification report.
+
+    Parameters
+    ----------
+    model : SimpleCNN
+        Trained CNN model to evaluate.
+    test_loader : DataLoader
+        Test DataLoader with image batches and labels.
+    device : torch.device, default=DEVICE from config
+        Device to use for evaluation.
+    threshold : float, default=THRESHOLD from config
+        Classification threshold for converting probabilities to class predictions.
+
+    Returns
+    -------
+    Dict
+        Dictionary with evaluation metrics.
+    """
+    print(f"\n{'='*60}")
+    print("EVALUATING CNN MODEL")
+    print(f"{'='*60}")
+    print(f"Test batches: {len(test_loader)}")
+    print(f"Threshold: {threshold}")
+
+    model.eval()
+    
+    all_preds = []
+    all_labels = []
+    all_probs = []
+
+    with torch.no_grad():
+        for images, labels in test_loader:
+            images = images.to(device)
+            labels = labels.float().to(device).view(-1, 1)
+
+            outputs = model(images)
+            
+            # Store probabilities and predictions
+            probs = outputs.cpu().numpy()
+            preds = (outputs >= threshold).float().view(-1).cpu().numpy()
+            
+            all_probs.extend(probs)
+            all_preds.extend(preds)
+            all_labels.extend(labels.cpu().numpy())
+
+    # Convert to numpy arrays
+    all_preds = np.array(all_preds)
+    all_labels = np.array(all_labels)
+    all_probs = np.array(all_probs)
+
+    # Calculate metrics
+    accuracy = accuracy_score(all_labels, all_preds)
+    f1 = f1_score(all_labels, all_preds, average='binary')
+    precision = precision_score(all_labels, all_preds, average='binary')
+    recall = recall_score(all_labels, all_preds, average='binary')
+    
+    # ROC-AUC requires probabilities, not binary predictions
+    roc_auc = roc_auc_score(all_labels, all_probs)
+
+    # Confusion matrix
+    conf_matrix = confusion_matrix(all_labels, all_preds)
+    
+    # Classification report
+    class_report = classification_report(all_labels, all_preds, output_dict=True)
+
+    # Print results
+    print(f"\nTest Set Evaluation:")
+    print(f"  Accuracy: {accuracy:.4f}")
+    print(f"  F1-Score: {f1:.4f}")
+    print(f"  Precision: {precision:.4f}")
+    print(f"  Recall: {recall:.4f}")
+    print(f"  ROC-AUC: {roc_auc:.4f}")
+    print(f"\nConfusion Matrix:")
+    print(f"  [[TN, FP],")
+    print(f"   [FP, TP]] = {conf_matrix.tolist()}")
+
+    print(f"\nClassification Report:")
+    for class_name, metrics in class_report.items():
+        if class_name in ['accuracy', 'macro avg', 'weighted avg']:
+            continue
+        print(f"  Class {class_name}:")
+        print(f"    Precision: {metrics['precision']:.4f}")
+        print(f"    Recall: {metrics['recall']:.4f}")
+        print(f"    F1-Score: {metrics['f1-score']:.4f}")
+    print(f"  Accuracy: {class_report['accuracy']:.4f}")
+
+    # Log metrics to MLflow
+    mlflow.log_metric("test_accuracy", accuracy)
+    mlflow.log_metric("test_f1_score", f1)
+    mlflow.log_metric("test_precision", precision)
+    mlflow.log_metric("test_recall", recall)
+    mlflow.log_metric("test_roc_auc", roc_auc)
+
+    return {
+        'accuracy': accuracy,
+        'f1_score': f1,
+        'precision': precision,
+        'recall': recall,
+        'roc_auc': roc_auc,
+        'confusion_matrix': conf_matrix.tolist(),
+        'classification_report': class_report,
+    }
+
+
+def tune_threshold(
+    model: SimpleCNN,
+    val_loader: DataLoader,
+    device: torch.device = DEVICE,
+    threshold_range: List[float] = [0.3, 0.4, 0.5, 0.6, 0.7],
+) -> float:
+    """
+    Tune classification threshold to maximize F1-score on validation set.
+
+    Evaluates model on validation set with different thresholds and selects
+    the one that maximizes F1-score.
+
+    Parameters
+    ----------
+    model : SimpleCNN
+        Trained CNN model.
+    val_loader : DataLoader
+        Validation DataLoader.
+    device : torch.device, default=DEVICE from config
+        Device to use for evaluation.
+    threshold_range : List[float], default=[0.3, 0.4, 0.5, 0.6, 0.7]
+        Range of thresholds to evaluate.
+
+    Returns
+    -------
+    float
+        Optimal threshold that maximizes F1-score.
+    """
+    print(f"\n{'='*60}")
+    print("TUNING CLASSIFICATION THRESHOLD")
+    print(f"{'='*60}")
+    print(f"Threshold range: {threshold_range}")
+
+    model.eval()
+    
+    all_probs = []
+    all_labels = []
+
+    # Get all predictions and labels from validation set
+    with torch.no_grad():
+        for images, labels in val_loader:
+            images = images.to(device)
+            labels = labels.float().to(device).view(-1, 1)
+
+            outputs = model(images)
+            
+            all_probs.extend(outputs.cpu().numpy())
+            all_labels.extend(labels.cpu().numpy())
+
+    all_probs = np.array(all_probs).flatten()
+    all_labels = np.array(all_labels)
+
+    # Test each threshold
+    best_threshold = THRESHOLD
+    best_f1 = 0.0
+    
+    results = {}
+
+    for threshold in threshold_range:
+        preds = (all_probs >= threshold).astype(int)
+        f1 = f1_score(all_labels, preds, average='binary')
+        
+        results[threshold] = {
+            'f1_score': f1,
+            'accuracy': accuracy_score(all_labels, preds),
+            'precision': precision_score(all_labels, preds, average='binary'),
+            'recall': recall_score(all_labels, preds, average='binary'),
+        }
+
+        if f1 > best_f1:
+            best_f1 = f1
+            best_threshold = threshold
+
+        print(f"  Threshold {threshold}: F1={f1:.4f}, Acc={results[threshold]['accuracy']:.4f}, "
+              f"Prec={results[threshold]['precision']:.4f}, Rec={results[threshold]['recall']:.4f}")
+
+    print(f"\nOptimal threshold: {best_threshold} (F1-score: {best_f1:.4f})")
+
+    # Log to MLflow
+    mlflow.log_param("optimal_threshold", best_threshold)
+    mlflow.log_metric("optimal_threshold_f1", best_f1)
+
+    return best_threshold
 
 
 def train_xgboost(
@@ -447,27 +780,40 @@ def train_logistic_regression(
 
 
 def save_model_artifacts(
-    X_train: pd.DataFrame,
+    model: SimpleCNN,
     model_results: dict,
+    threshold: float = THRESHOLD,
 ) -> None:
     """
-    Save model artifacts including column list and results.
+    Save PyTorch CNN model artifacts.
+
+    Saves:
+    - Model state dict and architecture
+    - Training results and metrics
+    - Optimal classification threshold
 
     Parameters
     ----------
-    X_train : pd.DataFrame
-        Training features (used to get column names).
+    model : SimpleCNN
+        Trained CNN model to save.
     model_results : dict
-        Dictionary mapping model paths to their evaluation results.
+        Dictionary with evaluation results and metrics.
+    threshold : float, default=THRESHOLD from config
+        Optimal classification threshold.
     """
-    print("\nSaving model artifacts...")
+    print("\nSaving CNN model artifacts...")
 
-    # Save column list
-    COLUMNS_LIST_PATH.parent.mkdir(parents=True, exist_ok=True)
-    columns = {"column_names": list(X_train.columns)}
-    with open(COLUMNS_LIST_PATH, "w") as columns_file:
-        json.dump(columns, columns_file, indent=2)
-    print(f"Column list saved to {COLUMNS_LIST_PATH}")
+    # Save model state dict
+    PYTORCH_MODEL_PATH.parent.mkdir(parents=True, exist_ok=True)
+    torch.save({
+        'model_state_dict': model.state_dict(),
+        'architecture': SimpleCNN.__name__,
+        'input_shape': (3, 64, 64),  # RGB 64x64 images
+        'output_shape': (1,),  # Binary classification
+        'threshold': threshold,
+        'num_classes': NUM_CLASSES,
+    }, PYTORCH_MODEL_PATH)
+    print(f"CNN model saved to {PYTORCH_MODEL_PATH}")
 
     # Save model results
     MODEL_RESULTS_PATH.parent.mkdir(parents=True, exist_ok=True)
@@ -475,86 +821,121 @@ def save_model_artifacts(
         json.dump(model_results, results_file, indent=2)
     print(f"Model results saved to {MODEL_RESULTS_PATH}")
 
+    # Log threshold to MLflow
+    mlflow.log_param("classification_threshold", threshold)
+
 
 def train_models(
-    data: pd.DataFrame = None,
+    train_loader: DataLoader = None,
+    val_loader: DataLoader = None,
+    test_loader: DataLoader = None,
 ) -> dict:
     """
-    Complete model training pipeline.
+    Complete CNN model training pipeline for image classification.
 
-    If data is not provided, loads from TRAIN_DATA_GOLD_PATH.
+    If DataLoaders are not provided, loads from the data pipeline.
 
-    Trains both XGBoost and Logistic Regression models, evaluates them,
-    and saves all artifacts.
+    Trains the SimpleCNN model, evaluates it, tunes the threshold,
+    and saves all artifacts with MLflow integration.
 
     Parameters
     ----------
-    data : pd.DataFrame, optional
-        Preprocessed training data. If None, loads from file.
+    train_loader : DataLoader, optional
+        Training DataLoader. If None, loads from data pipeline.
+    val_loader : DataLoader, optional
+        Validation DataLoader. If None, loads from data pipeline.
+    test_loader : DataLoader, optional
+        Test DataLoader. If None, loads from data pipeline.
 
     Returns
     -------
     dict
-        Dictionary with trained models and their evaluation results.
+        Dictionary with trained model, evaluation results, and history.
     """
-    print_section_header("MODEL TRAINING")
+    print_section_header("CNN MODEL TRAINING")
 
     # Setup MLflow
     setup_mlflow()
 
     # Load data if not provided
-    if data is None:
-        data = load_training_data()
+    if train_loader is None or val_loader is None or test_loader is None:
+        from ..data.preprocess import preprocess_data
+        train_loader, val_loader, test_loader = preprocess_data()
 
-    # Prepare data
-    data = prepare_data_for_training(data)
+    # Log parameters to MLflow
+    mlflow.log_param("model_architecture", "SimpleCNN")
+    mlflow.log_param("batch_size", BATCH_SIZE)
+    mlflow.log_param("num_epochs", NUM_EPOCHS)
+    mlflow.log_param("learning_rate", LEARNING_RATE)
+    mlflow.log_param("initial_threshold", THRESHOLD)
+    mlflow.log_param("num_classes", NUM_CLASSES)
+    mlflow.log_param("image_size", "64x64")
+    mlflow.log_param("random_seed", RANDOM_STATE)
 
-    # Split data
-    X_train, X_test, y_train, y_test = split_data(data)
+    # Log model architecture details
+    model_params = sum(p.numel() for p in SimpleCNN().parameters())
+    trainable_params = sum(p.numel() for p in SimpleCNN().parameters() if p.requires_grad)
+    mlflow.log_param("total_parameters", model_params)
+    mlflow.log_param("trainable_parameters", trainable_params)
 
-    # Train XGBoost
-    xgboost_model_grid = train_xgboost(X_train, y_train)
-    xgboost_model = evaluate_and_save_xgboost(
-        xgboost_model_grid, X_train, y_train, X_test, y_test
-    )
+    # Start MLflow run
+    with mlflow.start_run() as run:
+        # Train CNN model
+        cnn_model, training_history = train_cnn_model(
+            train_loader, val_loader,
+            num_epochs=NUM_EPOCHS,
+            learning_rate=LEARNING_RATE,
+            device=DEVICE,
+            random_seed=RANDOM_STATE,
+        )
 
-    # Train Logistic Regression
-    lr_model, lr_model_grid = train_logistic_regression(
-        X_train, y_train, X_test, y_test
-    )
+        # Tune threshold on validation set
+        optimal_threshold = tune_threshold(
+            cnn_model, val_loader, device=DEVICE
+        )
 
-    # Build model results
-    model_results = {
-        str(XGBOOST_MODEL_PATH): classification_report(
-            y_train, xgboost_model_grid.predict(X_train), output_dict=True
-        ),
-        str(LR_MODEL_PATH): classification_report(
-            y_test, lr_model_grid.predict(X_test), output_dict=True
-        ),
-    }
+        # Evaluate on test set with optimal threshold
+        test_results = evaluate_cnn_model(
+            cnn_model, test_loader,
+            device=DEVICE,
+            threshold=optimal_threshold,
+        )
 
-    # Save artifacts
-    save_model_artifacts(X_train, model_results)
+        # Save model artifacts
+        save_model_artifacts(cnn_model, test_results, threshold=optimal_threshold)
+
+        # Log model to MLflow
+        mlflow.pytorch.log_model(
+            cnn_model,
+            "model",
+            registered_model_name=MODEL_NAME,
+        )
 
     return {
-        "xgboost": xgboost_model,
-        "logistic_regression": lr_model,
-        "results": model_results,
+        "cnn_model": cnn_model,
+        "training_history": training_history,
+        "test_results": test_results,
+        "optimal_threshold": optimal_threshold,
     }
 
 
 if __name__ == "__main__":
     """
-    Run model training module directly.
+    Run CNN model training module directly.
 
     Usage:
         python -m src.models.train
     """
-    print("Running model training module...")
+    print("Running CNN model training module...")
     try:
-        models = train_models()
-        print("\nModel training complete!")
-        print(f"Trained models: {list(models.keys())}")
+        # Set seeds for reproducibility
+        torch.manual_seed(RANDOM_STATE)
+        np.random.seed(RANDOM_STATE)
+        
+        result = train_models()
+        print("\nCNN model training complete!")
+        print(f"Optimal threshold: {result.get('optimal_threshold')}")
+        print(f"Test results: {result.get('test_results')}")
     except Exception as e:
         print(f"Error: {e}", file=sys.stderr)
         import traceback

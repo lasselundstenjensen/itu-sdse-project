@@ -1,7 +1,8 @@
 """
-Configuration for the MLOps Pipeline
+Configuration for the Image Classification MLOps Pipeline
 
-Centralized constants and paths used throughout the pipeline.
+Centralized constants and paths used throughout the pipeline for glass vial
+image classification using PyTorch CNN.
 All values can be modified directly in this file.
 """
 
@@ -12,8 +13,7 @@ from pathlib import Path
 # DATE CONFIGURATION
 # =============================================================================
 
-# Default date range for training data
-# These can be overridden when calling the fetch functions
+# Default date range for training data (kept for compatibility)
 MIN_DATE = "2024-01-01"
 MAX_DATE = "2024-01-31"
 
@@ -27,41 +27,27 @@ ARTIFACT_DIR = Path("./artifacts")
 # MLflow tracking directory
 MLRUNS_DIR = Path("./mlruns")
 
-# Data paths
-# Note: raw_data.csv is currently in notebooks/artifacts/ from the original setup
-RAW_DATA_PATH = Path("./notebooks/artifacts/raw_data.csv")
-TRAIN_DATA_GOLD_PATH = ARTIFACT_DIR / "train_data_gold.csv"
-TRAIN_DATA_PATH = ARTIFACT_DIR / "training_data.csv"
-
-# Scaler and preprocessor paths
-SCALER_PATH = ARTIFACT_DIR / "scaler.pkl"
+# Image data paths
+IMAGE_DATA_DIR = Path("./data/images/raw")
+METADATA_PATH = Path("./data/images/metadata.csv")
 
 # Model paths
-XGBOOST_MODEL_PATH = ARTIFACT_DIR / "lead_model_xgboost.json"
-LR_MODEL_PATH = ARTIFACT_DIR / "lead_model_lr.pkl"
+PYTORCH_MODEL_PATH = ARTIFACT_DIR / "vial_cnn_model.pth"
 
-# Metadata paths
-COLUMNS_DRIFT_PATH = ARTIFACT_DIR / "columns_drift.json"
-COLUMNS_LIST_PATH = ARTIFACT_DIR / "columns_list.json"
+# Metadata paths for image classification
+CLASS_NAMES_PATH = ARTIFACT_DIR / "class_names.json"
+IMAGE_STATISTICS_PATH = ARTIFACT_DIR / "image_statistics.json"
 MODEL_RESULTS_PATH = ARTIFACT_DIR / "model_results.json"
-DATE_LIMITS_PATH = ARTIFACT_DIR / "date_limits.json"
-CAT_MISSING_IMPUTE_PATH = ARTIFACT_DIR / "cat_missing_impute.csv"
-OUTLIER_SUMMARY_PATH = ARTIFACT_DIR / "outlier_summary.csv"
-
-# Test data paths (from existing notebooks directory)
-X_TEST_PATH = Path("./notebooks/artifacts/X_test.csv")
-Y_TEST_PATH = Path("./notebooks/artifacts/y_test.csv")
 
 # =============================================================================
 # MLFLOW CONFIGURATION
 # =============================================================================
 
-# Experiment name - uses current date by default
-# This creates a new experiment each day
-EXPERIMENT_NAME = datetime.datetime.now().strftime("%Y_%B_%d")
+# Experiment name for image classification
+EXPERIMENT_NAME = "vial_image_classification"
 
 # Model registry name
-MODEL_NAME = "lead_model"
+MODEL_NAME = "cnn_model"
 
 # Artifact path for MLflow model logging
 ARTIFACT_PATH = "model"
@@ -76,23 +62,64 @@ DATA_VERSION = "00000"
 # Random state for reproducibility
 RANDOM_STATE = 42
 
-# Test size for train/test split
-TEST_SIZE = 0.15
+# =============================================================================
+# IMAGE CLASSIFICATION CONFIGURATION
+# =============================================================================
 
-# Outlier handling - z-score threshold
-OUTLIER_Z_THRESHOLD = 2.0
+# Image specifications
+IMAGE_SIZE = (64, 64)
+NUM_CLASSES = 2
 
-# Imputation method for numeric columns
-IMPUTATION_METHOD = "mean"  # or "median"
+# Training configuration
+BATCH_SIZE = 32
+NUM_EPOCHS = 50
+LEARNING_RATE = 0.001
+
+# Transform parameters (ImageNet statistics)
+TRANSFORM_MEAN = [0.485, 0.456, 0.406]
+TRANSFORM_STD = [0.229, 0.224, 0.225]
+
+# Classification threshold (tunable)
+THRESHOLD = 0.5
+
+# Device configuration (auto-detected) - import lazily to avoid dependency issues
+_DEVICE = None
+
+def get_device():
+    """Get the appropriate device for PyTorch operations."""
+    global _DEVICE
+    if _DEVICE is None:
+        try:
+            import torch
+            _DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        except ImportError:
+            # Fallback if PyTorch is not available
+            _DEVICE = "cpu"
+    return _DEVICE
+
+# For backward compatibility, use the function or import torch when needed
+DEVICE = None  # Will be set to actual device when torch is available
+
+# Dataset split ratios
+TRAIN_RATIO = 0.70
+VAL_RATIO = 0.15
+TEST_RATIO = 0.15
 
 
 if __name__ == "__main__":
     """Print configuration when run directly."""
-    print("MLOps Pipeline Configuration")
+    print("Image Classification MLOps Pipeline Configuration")
     print("=" * 50)
     print(f"Date Range: {MIN_DATE} to {MAX_DATE}")
     print(f"Artifact Directory: {ARTIFACT_DIR.resolve()}")
     print(f"Experiment Name: {EXPERIMENT_NAME}")
     print(f"Model Name: {MODEL_NAME}")
     print(f"Random State: {RANDOM_STATE}")
-    print(f"Test Size: {TEST_SIZE}")
+    print(f"Image Size: {IMAGE_SIZE}")
+    print(f"Number of Classes: {NUM_CLASSES}")
+    print(f"Batch Size: {BATCH_SIZE}")
+    print(f"Number of Epochs: {NUM_EPOCHS}")
+    print(f"Learning Rate: {LEARNING_RATE}")
+    device = get_device()
+    print(f"Device: {device}")
+    print(f"Classification Threshold: {THRESHOLD}")

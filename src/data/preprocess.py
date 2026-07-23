@@ -1,446 +1,408 @@
 """
-Data Preprocessing Module
+Image Data Preprocessing Module
 
-Handles data cleaning, transformation, and preparation for modeling.
-This includes feature selection, missing value handling, outlier treatment,
-and standardization.
+Handles image data preprocessing for the CNN model.
+This includes defining transforms, creating PyTorch DataLoaders,
+and splitting the dataset into train/val/test sets.
 """
 
 import json
 import sys
 from pathlib import Path
+from typing import List, Tuple
 
 import numpy as np
 import pandas as pd
-from sklearn.preprocessing import MinMaxScaler
+import torch
+from torch.utils.data import DataLoader, Dataset, random_split
+from torchvision import transforms
 
 from ..config import (
     ARTIFACT_DIR,
-    CAT_MISSING_IMPUTE_PATH,
-    OUTLIER_SUMMARY_PATH,
+    BATCH_SIZE,
+    IMAGE_SIZE,
+    IMAGE_STATISTICS_PATH,
+    NUM_CLASSES,
     RANDOM_STATE,
-    SCALER_PATH,
+    TRAIN_RATIO,
+    TEST_RATIO,
+    TRANSFORM_MEAN,
+    TRANSFORM_STD,
+    VAL_RATIO,
 )
 from ..utils import (
-    check_columns_exist,
-    check_dataframe_not_empty,
-    describe_numeric_col,
-    impute_missing_values,
+    calculate_image_statistics,
+    count_classes,
     print_section_header,
 )
 
 
-def select_features(data: pd.DataFrame) -> pd.DataFrame:
+class GlassVialDataset(Dataset):
     """
-    Remove irrelevant columns for modeling.
+    Custom PyTorch Dataset for glass vial images.
 
-    Drops columns that are not needed for the ML model:
-    - is_active, marketing_consent, first_booking, existing_customer, last_seen
-    - domain, country, visited_learn_more_before_booking, visited_faq
+    Loads images and their labels for training and inference.
+    Applies specified transforms to the images.
 
     Parameters
     ----------
-    data : pd.DataFrame
-        Raw data with all columns.
+    image_paths : List[Path]
+        List of paths to image files.
+    labels : List[int]
+        List of corresponding class labels (0=good, 1=defective).
+    transform : callable, optional
+        Optional transform to be applied to images.
+    """
+
+    def __init__(self, image_paths: List[Path], labels: List[int], transform=None):
+        self.image_paths = image_paths
+        self.labels = labels
+        self.transform = transform
+
+    def __len__(self) -> int:
+        return len(self.image_paths)
+
+    def __getitem__(self, idx: int) -> Tuple[torch.Tensor, int]:
+        """
+        Get item at index idx.
+
+        Returns
+        -------
+        Tuple[torch.Tensor, int]
+            - Transformed image tensor (C, H, W) format
+            - Class label
+        """
+        from PIL import Image
+
+        image_path = self.image_paths[idx]
+        label = self.labels[idx]
+
+        # Load image
+        with Image.open(image_path) as img:
+            # Convert to RGB if needed
+            if img.mode != 'RGB':
+                img = img.convert('RGB')
+            image = img.copy()
+
+        # Apply transform if specified
+        if self.transform:
+            image = self.transform(image)
+
+        return image, label
+
+
+def define_transforms() -> Tuple[transforms.Compose, transforms.Compose]:
+    """
+    Define PyTorch transforms for training and validation.
+
+    Training transforms include data augmentation:
+    - Random horizontal flip (50% probability)
+    - Random rotation (±10 degrees)
+    - Color jitter (brightness, contrast, saturation)
+    - Resize to 64x64
+    - Convert to tensor
+    - Normalize using ImageNet statistics
+
+    Validation transforms (no augmentation):
+    - Resize to 64x64
+    - Convert to tensor
+    - Normalize using ImageNet statistics
 
     Returns
     -------
-    pd.DataFrame
-        Data with only relevant columns for modeling.
+    Tuple[transforms.Compose, transforms.Compose]
+        - Training transforms with augmentation
+        - Validation transforms without augmentation
     """
-    print("Selecting features...")
+    print("Defining image transforms...")
 
-    # Drop columns that are not needed for modeling
-    drop_cols_1 = [
-        "is_active",
-        "marketing_consent",
-        "first_booking",
-        "existing_customer",
-        "last_seen",
-    ]
-    data = data.drop(drop_cols_1, axis=1)
+    # Training transforms with data augmentation
+    train_transforms = transforms.Compose([
+        transforms.Resize(IMAGE_SIZE),
+        transforms.RandomHorizontalFlip(p=0.5),
+        transforms.RandomRotation(10),
+        transforms.ColorJitter(brightness=0.2, contrast=0.2, saturation=0.2),
+        transforms.ToTensor(),
+        transforms.Normalize(mean=TRANSFORM_MEAN, std=TRANSFORM_STD),
+    ])
 
-    # Remove columns that will be added back after EDA
-    drop_cols_2 = [
-        "domain",
-        "country",
-        "visited_learn_more_before_booking",
-        "visited_faq",
-    ]
-    data = data.drop(drop_cols_2, axis=1)
+    # Validation transforms (no augmentation)
+    val_transforms = transforms.Compose([
+        transforms.Resize(IMAGE_SIZE),
+        transforms.ToTensor(),
+        transforms.Normalize(mean=TRANSFORM_MEAN, std=TRANSFORM_STD),
+    ])
 
-    print(f"Dropped {len(drop_cols_1) + len(drop_cols_2)} columns. Remaining: {data.shape[1]}")
-    return data
+    print("Training transforms: Resize → RandomHorizontalFlip → RandomRotation → ColorJitter → ToTensor → Normalize")
+    print("Validation transforms: Resize → ToTensor → Normalize")
+
+    return train_transforms, val_transforms
 
 
-def clean_data(data: pd.DataFrame) -> pd.DataFrame:
+def split_dataset(
+    image_dataset: List[Tuple[Path, int]],
+    train_ratio: float = TRAIN_RATIO,
+    val_ratio: float = VAL_RATIO,
+    test_ratio: float = TEST_RATIO,
+    random_seed: int = RANDOM_STATE,
+) -> Tuple[List[Tuple[Path, int]], List[Tuple[Path, int]], List[Tuple[Path, int]]]:
     """
-    Clean data by removing rows with invalid values.
+    Split dataset into train, validation, and test sets with stratified sampling.
 
-    Steps:
-    1. Replace empty strings with NaN in key columns
-    2. Drop rows with missing target (lead_indicator) or ID (lead_id)
-    3. Filter to only "signup" source
-    4. Print target distribution
+    Ensures that each set maintains the same class distribution (50/50 balance).
 
     Parameters
     ----------
-    data : pd.DataFrame
-        Raw data with potential issues.
+    image_dataset : List[Tuple[Path, int]]
+        List of (image_path, label) tuples.
+    train_ratio : float, default=TRAIN_RATIO from config
+        Proportion of data for training.
+    val_ratio : float, default=VAL_RATIO from config
+        Proportion of data for validation.
+    test_ratio : float, default=TEST_RATIO from config
+        Proportion of data for testing.
+    random_seed : int, default=RANDOM_STATE from config
+        Random seed for reproducibility.
 
     Returns
     -------
-    pd.DataFrame
-        Cleaned data with valid values.
-
-    Raises
-    ------
-    ValueError
-        If required columns are missing.
+    Tuple[List, List, List]
+        - Training set: List of (image_path, label) tuples
+        - Validation set: List of (image_path, label) tuples
+        - Test set: List of (image_path, label) tuples
     """
-    print("Cleaning data...")
+    print(f"\nSplitting dataset into train ({train_ratio}), val ({val_ratio}), test ({test_ratio})...")
 
-    # Check for required columns
-    required_cols = ["lead_indicator", "lead_id", "customer_code", "source"]
-    check_columns_exist(data, required_cols)
+    # Set random seed for reproducibility
+    np.random.seed(random_seed)
+    torch.manual_seed(random_seed)
 
-    # Replace empty strings with NaN
-    data["lead_indicator"] = data["lead_indicator"].replace("", np.nan)
-    data["lead_id"] = data["lead_id"].replace("", np.nan)
-    data["customer_code"] = data["customer_code"].replace("", np.nan)
+    # Separate by class for stratified sampling
+    class_0 = [(path, label) for path, label in image_dataset if label == 0]
+    class_1 = [(path, label) for path, label in image_dataset if label == 1]
 
-    # Drop rows with missing target or ID
-    data = data.dropna(axis=0, subset=["lead_indicator"])
-    data = data.dropna(axis=0, subset=["lead_id"])
+    print(f"Class distribution before split: Class 0: {len(class_0)}, Class 1: {len(class_1)}")
 
-    # Filter by source
-    data = data[data.source == "signup"]
+    # Shuffle each class
+    np.random.shuffle(class_0)
+    np.random.shuffle(class_1)
 
-    # Print target distribution
-    result = data.lead_indicator.value_counts(normalize=True)
-    print("\nTarget value distribution:")
-    for val, n in zip(result.index, result):
-        print(f"  {val}: {n:.4f}")
+    # Split each class into train/val/test
+    def split_class(data: List, ratios: Tuple[float, float, float]) -> Tuple[List, List, List]:
+        total = len(data)
+        train_size = int(total * ratios[0])
+        val_size = int(total * ratios[1])
+        
+        train_data = data[:train_size]
+        val_data = data[train_size:train_size + val_size]
+        test_data = data[train_size + val_size:]
+        
+        return train_data, val_data, test_data
 
-    return data
+    # Split each class
+    train_0, val_0, test_0 = split_class(class_0, (train_ratio, val_ratio, test_ratio))
+    train_1, val_1, test_1 = split_class(class_1, (train_ratio, val_ratio, test_ratio))
+
+    # Combine classes for final datasets
+    train_dataset = train_0 + train_1
+    val_dataset = val_0 + val_1
+    test_dataset = test_0 + test_1
+
+    # Shuffle the combined datasets
+    np.random.shuffle(train_dataset)
+    np.random.shuffle(val_dataset)
+    np.random.shuffle(test_dataset)
+
+    print(f"Split complete:")
+    print(f"  Training set: {len(train_dataset)} images")
+    print(f"  Validation set: {len(val_dataset)} images")
+    print(f"  Test set: {len(test_dataset)} images")
+
+    # Print class distribution for each set
+    train_labels = [label for _, label in train_dataset]
+    val_labels = [label for _, label in val_dataset]
+    test_labels = [label for _, label in test_dataset]
+
+    print(f"\nClass distribution after split:")
+    print(f"  Train - Class 0: {train_labels.count(0)}, Class 1: {train_labels.count(1)}")
+    print(f"  Val - Class 0: {val_labels.count(0)}, Class 1: {val_labels.count(1)}")
+    print(f"  Test - Class 0: {test_labels.count(0)}, Class 1: {test_labels.count(1)}")
+
+    return train_dataset, val_dataset, test_dataset
 
 
-def create_categorical_columns(
-    data: pd.DataFrame,
-    cols: list[str] = None,
-) -> pd.DataFrame:
+def create_dataloaders(
+    train_dataset: List[Tuple[Path, int]],
+    val_dataset: List[Tuple[Path, int]],
+    test_dataset: List[Tuple[Path, int]],
+    batch_size: int = BATCH_SIZE,
+    train_transforms: transforms.Compose = None,
+    val_transforms: transforms.Compose = None,
+) -> Tuple[DataLoader, DataLoader, DataLoader]:
     """
-    Convert specified columns to categorical (object) type.
+    Create PyTorch DataLoader objects for training, validation, and testing.
 
     Parameters
     ----------
-    data : pd.DataFrame
-        DataFrame with columns to convert.
-    cols : list[str], optional
-        List of column names to convert. If None, uses default list.
+    train_dataset : List[Tuple[Path, int]]
+        Training data as list of (image_path, label) tuples.
+    val_dataset : List[Tuple[Path, int]]
+        Validation data as list of (image_path, label) tuples.
+    test_dataset : List[Tuple[Path, int]]
+        Test data as list of (image_path, label) tuples.
+    batch_size : int, default=BATCH_SIZE from config
+        Batch size for DataLoaders.
+    train_transforms : transforms.Compose, optional
+        Transforms to apply to training data.
+    val_transforms : transforms.Compose, optional
+        Transforms to apply to validation and test data.
 
     Returns
     -------
-    pd.DataFrame
-        DataFrame with specified columns converted to object type.
+    Tuple[DataLoader, DataLoader, DataLoader]
+        - Training DataLoader (shuffled)
+        - Validation DataLoader
+        - Test DataLoader
     """
-    if cols is None:
-        cols = [
-            "lead_id",
-            "lead_indicator",
-            "customer_group",
-            "onboarding",
-            "source",
-            "customer_code",
-        ]
+    print(f"\nCreating DataLoaders with batch_size={batch_size}...")
 
-    print("Creating categorical columns...")
-    for col in cols:
-        if col in data.columns:
-            data[col] = data[col].astype("object")
-            print(f"  Changed {col} to object type")
+    # Extract image paths and labels
+    train_paths, train_labels = zip(*train_dataset) if train_dataset else ([], [])
+    val_paths, val_labels = zip(*val_dataset) if val_dataset else ([], [])
+    test_paths, test_labels = zip(*test_dataset) if test_dataset else ([], [])
 
-    return data
+    # If no transforms provided, define default ones
+    if train_transforms is None or val_transforms is None:
+        train_transforms, val_transforms = define_transforms()
 
+    # Create datasets
+    train_data = GlassVialDataset(list(train_paths), list(train_labels), train_transforms)
+    val_data = GlassVialDataset(list(val_paths), list(val_labels), val_transforms)
+    test_data = GlassVialDataset(list(test_paths), list(test_labels), val_transforms)
 
-def separate_columns(data: pd.DataFrame) -> tuple[pd.DataFrame, pd.DataFrame]:
-    """
-    Separate continuous and categorical columns.
-
-    Continuous: float64 or int64 dtype
-    Categorical: object dtype
-
-    Parameters
-    ----------
-    data : pd.DataFrame
-        DataFrame with mixed column types.
-
-    Returns
-    -------
-    tuple[pd.DataFrame, pd.DataFrame]
-        - Continuous variables DataFrame
-        - Categorical variables DataFrame
-    """
-    print("\nSeparating continuous and categorical columns...")
-
-    cont_vars = data.loc[:, ((data.dtypes == "float64") | (data.dtypes == "int64"))]
-    cat_vars = data.loc[:, (data.dtypes == "object")]
-
-    print("\nContinuous columns:")
-    for col in cont_vars.columns:
-        print(f"  - {col}")
-
-    print("\nCategorical columns:")
-    for col in cat_vars.columns:
-        print(f"  - {col}")
-
-    return cont_vars, cat_vars
-
-
-def handle_outliers(
-    cont_vars: pd.DataFrame,
-    z_threshold: float = 2.0,
-) -> tuple[pd.DataFrame, pd.DataFrame]:
-    """
-    Handle outliers using z-score method (clipping).
-
-    Clips values that are more than z_threshold standard deviations
-    from the mean.
-
-    Parameters
-    ----------
-    cont_vars : pd.DataFrame
-        DataFrame with continuous variables.
-    z_threshold : float, default=2.0
-        Number of standard deviations from mean to use as threshold.
-
-    Returns
-    -------
-    tuple[pd.DataFrame, pd.DataFrame]
-        - DataFrame with outliers clipped
-        - Summary DataFrame with outlier statistics
-    """
-    print(f"\nHandling outliers (z-score threshold: {z_threshold})...")
-
-    cont_vars = cont_vars.apply(
-        lambda x: x.clip(
-            lower=(x.mean() - z_threshold * x.std()),
-            upper=(x.mean() + z_threshold * x.std()),
-        )
+    # Create DataLoaders
+    train_loader = DataLoader(
+        train_data,
+        batch_size=batch_size,
+        shuffle=True,  # Shuffle training data
+        num_workers=2,
+        pin_memory=True,
     )
 
-    # Calculate outlier summary
-    outlier_summary = cont_vars.apply(describe_numeric_col).T
-
-    # Save summary
-    OUTLIER_SUMMARY_PATH.parent.mkdir(parents=True, exist_ok=True)
-    outlier_summary.to_csv(OUTLIER_SUMMARY_PATH)
-    print(f"Outlier summary saved to {OUTLIER_SUMMARY_PATH}")
-
-    return cont_vars, outlier_summary
-
-
-def impute_missing_values_data(
-    cont_vars: pd.DataFrame,
-    cat_vars: pd.DataFrame,
-) -> tuple[pd.DataFrame, pd.DataFrame]:
-    """
-    Impute missing values in continuous and categorical variables.
-
-    For continuous: uses mean (configurable via IMPUTATION_METHOD)
-    For categorical: uses mode, with special handling for customer_code
-
-    Parameters
-    ----------
-    cont_vars : pd.DataFrame
-        Continuous variables to impute.
-    cat_vars : pd.DataFrame
-        Categorical variables to impute.
-
-    Returns
-    -------
-    tuple[pd.DataFrame, pd.DataFrame]
-        - Continuous variables with missing values imputed
-        - Categorical variables with missing values imputed
-    """
-    print("\nImputing missing values...")
-
-    # Save categorical missing imputation info (mode values)
-    cat_missing_impute = cat_vars.mode(numeric_only=False, dropna=True)
-    CAT_MISSING_IMPUTE_PATH.parent.mkdir(parents=True, exist_ok=True)
-    cat_missing_impute.to_csv(CAT_MISSING_IMPUTE_PATH)
-    print(f"Categorical imputation modes saved to {CAT_MISSING_IMPUTE_PATH}")
-
-    # Impute continuous variables
-    cont_vars = cont_vars.apply(impute_missing_values)
-
-    # Handle customer_code specially - fill NaN with 'None' string
-    if "customer_code" in cat_vars.columns:
-        cat_vars.loc[cat_vars["customer_code"].isna(), "customer_code"] = "None"
-
-    # Impute categorical variables
-    cat_vars = cat_vars.apply(impute_missing_values)
-
-    # Print missing value counts after imputation
-    print("\nMissing values after imputation:")
-    cont_missing = cont_vars.isnull().sum().sum()
-    cat_missing = cat_vars.isnull().sum().sum()
-    print(f"  Continuous: {cont_missing}")
-    print(f"  Categorical: {cat_missing}")
-
-    return cont_vars, cat_vars
-
-
-def standardize_data(
-    cont_vars: pd.DataFrame,
-) -> tuple[pd.DataFrame, MinMaxScaler]:
-    """
-    Standardize continuous variables using MinMaxScaler.
-
-    Scales all continuous variables to [0, 1] range.
-    Saves the fitted scaler for later use in inference.
-
-    Parameters
-    ----------
-    cont_vars : pd.DataFrame
-        Continuous variables to standardize.
-
-    Returns
-    -------
-    tuple[pd.DataFrame, MinMaxScaler]
-        - Standardized continuous variables
-        - Fitted MinMaxScaler instance
-    """
-    print("\nStandardizing continuous variables...")
-
-    scaler = MinMaxScaler()
-    scaler.fit(cont_vars)
-
-    # Save scaler
-    import joblib
-
-    SCALER_PATH.parent.mkdir(parents=True, exist_ok=True)
-    joblib.dump(value=scaler, filename=SCALER_PATH)
-    print(f"Scaler saved to {SCALER_PATH}")
-
-    # Transform data
-    cont_vars = pd.DataFrame(
-        scaler.transform(cont_vars),
-        columns=cont_vars.columns,
+    val_loader = DataLoader(
+        val_data,
+        batch_size=batch_size,
+        shuffle=False,  # Don't shuffle validation data
+        num_workers=2,
+        pin_memory=True,
     )
 
-    return cont_vars, scaler
+    test_loader = DataLoader(
+        test_data,
+        batch_size=batch_size,
+        shuffle=False,  # Don't shuffle test data
+        num_workers=2,
+        pin_memory=True,
+    )
+
+    print(f"DataLoaders created:")
+    print(f"  Train: {len(train_loader)} batches")
+    print(f"  Val: {len(val_loader)} batches")
+    print(f"  Test: {len(test_loader)} batches")
+
+    return train_loader, val_loader, test_loader
 
 
-def combine_data(
-    cont_vars: pd.DataFrame,
-    cat_vars: pd.DataFrame,
-) -> pd.DataFrame:
+def preprocess_data(
+    image_dataset: List[Tuple[Path, int]] = None,
+) -> Tuple[DataLoader, DataLoader, DataLoader]:
     """
-    Combine continuous and categorical data back together.
-
-    Resets indexes to ensure alignment before concatenation.
-
-    Parameters
-    ----------
-    cont_vars : pd.DataFrame
-        Standardized continuous variables.
-    cat_vars : pd.DataFrame
-        Imputed categorical variables.
-
-    Returns
-    -------
-    pd.DataFrame
-        Combined DataFrame with all variables.
-    """
-    print("\nCombining continuous and categorical data...")
-
-    cont_vars = cont_vars.reset_index(drop=True)
-    cat_vars = cat_vars.reset_index(drop=True)
-
-    # Categorical first, then continuous (as in original notebook)
-    data = pd.concat([cat_vars, cont_vars], axis=1)
-
-    print(f"Data combined. Shape: {data.shape}")
-    return data
-
-
-def preprocess_data(data: pd.DataFrame) -> pd.DataFrame:
-    """
-    Complete data preprocessing pipeline.
+    Complete image data preprocessing pipeline.
 
     This function combines all preprocessing steps in sequence:
-    1. Feature selection
-    2. Data cleaning
-    3. Create categorical columns
-    4. Separate continuous and categorical
-    5. Handle outliers
-    6. Impute missing values
-    7. Standardize continuous variables
-    8. Combine data
+    1. Define transforms for data augmentation
+    2. Split dataset into train/val/test sets with stratified sampling
+    3. Create PyTorch DataLoader objects
+    4. Save preprocessing metadata (class distribution, image statistics)
 
     Parameters
     ----------
-    data : pd.DataFrame
-        Raw data to preprocess.
+    image_dataset : List[Tuple[Path, int]], optional
+        List of (image_path, label) tuples. If None, loads from fetch_and_prepare_data().
 
     Returns
     -------
-    pd.DataFrame
-        Fully preprocessed data ready for feature engineering.
+    Tuple[DataLoader, DataLoader, DataLoader]
+        - Training DataLoader
+        - Validation DataLoader
+        - Test DataLoader
     """
-    print_section_header("DATA PREPROCESSING")
+    print_section_header("IMAGE DATA PREPROCESSING")
 
-    # Feature selection
-    data = select_features(data)
+    # Load image dataset if not provided
+    if image_dataset is None:
+        from .fetch import fetch_and_prepare_data
+        image_dataset = fetch_and_prepare_data()
 
-    # Data cleaning
-    data = clean_data(data)
+    # Check that we have data
+    if not image_dataset:
+        raise ValueError("No images found in dataset. Check data loading step.")
 
-    # Create categorical columns
-    data = create_categorical_columns(data)
+    print(f"Starting preprocessing with {len(image_dataset)} images")
 
-    # Separate columns
-    cont_vars, cat_vars = separate_columns(data)
+    # Print initial class distribution
+    labels = [label for _, label in image_dataset]
+    class_dist = count_classes(labels)
+    print(f"\nInitial class distribution:")
+    for cls, count in class_dist.items():
+        print(f"  Class {cls}: {count} images ({count/len(labels)*100:.1f}%)")
 
-    # Handle outliers
-    cont_vars, outlier_summary = handle_outliers(cont_vars)
+    # Define transforms
+    train_transforms, val_transforms = define_transforms()
 
-    # Impute missing values
-    cont_vars, cat_vars = impute_missing_values_data(cont_vars, cat_vars)
+    # Split dataset into train/val/test
+    train_dataset, val_dataset, test_dataset = split_dataset(image_dataset)
 
-    # Standardize data
-    cont_vars, scaler = standardize_data(cont_vars)
+    # Create DataLoaders
+    train_loader, val_loader, test_loader = create_dataloaders(
+        train_dataset, val_dataset, test_dataset, 
+        train_transforms=train_transforms, 
+        val_transforms=val_transforms
+    )
 
-    # Combine data
-    data = combine_data(cont_vars, cat_vars)
+    # Calculate and save image statistics from training set
+    print(f"\nCalculating image statistics from training set...")
+    image_stats = calculate_image_statistics(train_loader)
+    IMAGE_STATISTICS_PATH.parent.mkdir(parents=True, exist_ok=True)
+    with open(IMAGE_STATISTICS_PATH, "w") as f:
+        json.dump(image_stats, f, indent=2)
+    print(f"Image statistics saved to {IMAGE_STATISTICS_PATH}")
 
-    check_dataframe_not_empty(data, "Preprocessed data")
-    print(f"\nPreprocessing complete. Shape: {data.shape}")
+    print(f"\nPreprocessing complete.")
+    print(f"  Training batches: {len(train_loader)}")
+    print(f"  Validation batches: {len(val_loader)}")
+    print(f"  Test batches: {len(test_loader)}")
 
-    return data
+    return train_loader, val_loader, test_loader
 
 
 if __name__ == "__main__":
     """
-    Run data preprocessing module directly.
+    Run image data preprocessing module directly.
 
-    This will load data from the default location and run preprocessing.
+    This will load images from the default location and run preprocessing.
 
     Usage:
         python -m src.data.preprocess
     """
-    from .fetch import load_raw_data
-
-    print("Running data preprocessing module...")
+    print("Running image data preprocessing module...")
     try:
-        # Load data
-        data = load_raw_data()
-        print(f"Loaded raw data with shape: {data.shape}")
-
-        # Preprocess
-        data = preprocess_data(data)
-        print(f"\nPreprocessing complete. Final shape: {data.shape}")
+        # Load and preprocess data
+        train_loader, val_loader, test_loader = preprocess_data()
+        print(f"\nPreprocessing complete.")
+        print(f"  Train loader: {len(train_loader)} batches")
+        print(f"  Val loader: {len(val_loader)} batches")
+        print(f"  Test loader: {len(test_loader)} batches")
 
     except Exception as e:
         print(f"Error: {e}", file=sys.stderr)

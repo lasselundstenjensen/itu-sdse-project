@@ -1,14 +1,18 @@
 """
-Model Evaluation Module
+Model Evaluation Module for Image Classification
 
-Provides utilities for evaluating model performance.
-Includes accuracy, confusion matrix, classification report, and other metrics.
+Provides utilities for evaluating PyTorch CNN model performance.
+Includes accuracy, confusion matrix, classification report, and tensor handling.
 """
 
 import sys
-from typing import Any, Literal
+from typing import Any, Literal, Tuple
 
+import numpy as np
 import pandas as pd
+import torch
+from torch.utils.data import DataLoader
+
 from sklearn.metrics import (
     accuracy_score,
     classification_report,
@@ -17,6 +21,77 @@ from sklearn.metrics import (
 )
 
 from ..utils import print_section_header
+
+
+def tensor_to_numpy(tensor: torch.Tensor) -> np.ndarray:
+    """
+    Convert PyTorch tensor to NumPy array.
+
+    Handles the conversion and ensures the result is on CPU.
+
+    Parameters
+    ----------
+    tensor : torch.Tensor
+        PyTorch tensor to convert.
+
+    Returns
+    -------
+    np.ndarray
+        Converted NumPy array.
+    """
+    if isinstance(tensor, torch.Tensor):
+        return tensor.detach().cpu().numpy()
+    return np.array(tensor)
+
+
+def get_predictions(
+    model: torch.nn.Module,
+    data_loader: DataLoader,
+    device: torch.device = torch.device('cpu'),
+    threshold: float = 0.5,
+) -> Tuple[np.ndarray, np.ndarray]:
+    """
+    Get predictions and labels from a model on a dataset.
+
+    Parameters
+    ----------
+    model : torch.nn.Module
+        Trained PyTorch model.
+    data_loader : DataLoader
+        DataLoader with batches to predict on.
+    device : torch.device, default=torch.device('cpu')
+        Device to use for prediction.
+    threshold : float, default=0.5
+        Threshold for converting probabilities to class predictions.
+
+    Returns
+    -------
+    Tuple[np.ndarray, np.ndarray]
+        - Array of predicted class labels
+        - Array of true labels
+    """
+    model.eval()
+    
+    all_preds = []
+    all_labels = []
+
+    with torch.no_grad():
+        for images, labels in data_loader:
+            images = images.to(device)
+            labels_np = labels.numpy()
+            
+            outputs = model(images)
+            
+            # Convert outputs to predictions using threshold
+            if outputs.dim() > 1 and outputs.shape[1] == 1:
+                outputs = outputs.view(-1)
+            
+            preds = (outputs >= threshold).float().cpu().numpy()
+            
+            all_preds.extend(preds)
+            all_labels.extend(labels_np)
+
+    return np.array(all_preds), np.array(all_labels)
 
 
 def calculate_accuracy(
@@ -250,6 +325,110 @@ def evaluate_both_datasets(
         "train": train_metrics,
         "test": test_metrics,
     }
+
+
+def plot_confusion_matrix(
+    y_true: pd.Series | list | Any,
+    y_pred: pd.Series | list | Any,
+    class_names: dict = None,
+    title: str = "Confusion Matrix",
+) -> None:
+    """
+    Plot confusion matrix visualization.
+
+    Parameters
+    ----------
+    y_true : array-like
+        Ground truth (correct) target values.
+    y_pred : array-like
+        Estimated targets as returned by a classifier.
+    class_names : dict, optional
+        Dictionary mapping class indices to names.
+    title : str, default="Confusion Matrix"
+        Title for the plot.
+    """
+    try:
+        import matplotlib.pyplot as plt
+        import seaborn as sns
+        from sklearn.metrics import ConfusionMatrixDisplay
+    except ImportError:
+        print("Matplotlib or Seaborn not available. Skipping plot.")
+        return
+
+    # Convert to numpy if needed
+    y_true = tensor_to_numpy(y_true) if isinstance(y_true, torch.Tensor) else y_true
+    y_pred = tensor_to_numpy(y_pred) if isinstance(y_pred, torch.Tensor) else y_pred
+
+    # Create confusion matrix
+    cm = confusion_matrix(y_true, y_pred)
+
+    # Default class names
+    if class_names is None:
+        class_names = {0: "Good", 1: "Defective"}
+
+    # Plot
+    plt.figure(figsize=(8, 6))
+    sns.heatmap(cm, annot=True, fmt='d', cmap='Blues',
+                xticklabels=list(class_names.values()),
+                yticklabels=list(class_names.values()))
+    plt.title(title)
+    plt.xlabel('Predicted')
+    plt.ylabel('Actual')
+    plt.show()
+
+
+def plot_roc_curve(
+    model: torch.nn.Module,
+    data_loader: DataLoader,
+    device: torch.device = torch.device('cpu'),
+    class_names: dict = None,
+) -> None:
+    """
+    Plot ROC curve for the model.
+
+    Parameters
+    ----------
+    model : torch.nn.Module
+        Trained PyTorch model.
+    data_loader : DataLoader
+        DataLoader with data to evaluate on.
+    device : torch.device, default=torch.device('cpu')
+        Device to use for prediction.
+    class_names : dict, optional
+        Dictionary mapping class indices to names.
+    """
+    try:
+        import matplotlib.pyplot as plt
+        from sklearn.metrics import RocCurveDisplay
+    except ImportError:
+        print("Matplotlib not available. Skipping ROC curve plot.")
+        return
+
+    model.eval()
+    
+    all_probs = []
+    all_labels = []
+
+    with torch.no_grad():
+        for images, labels in data_loader:
+            images = images.to(device)
+            labels_np = labels.numpy()
+            
+            outputs = model(images)
+            
+            if outputs.dim() > 1 and outputs.shape[1] == 1:
+                outputs = outputs.view(-1)
+            
+            all_probs.extend(outputs.cpu().numpy())
+            all_labels.extend(labels_np)
+
+    all_probs = np.array(all_probs)
+    all_labels = np.array(all_labels)
+
+    # Plot ROC curve
+    RocCurveDisplay.from_predictions(all_labels, all_probs)
+    plt.title('ROC Curve')
+    plt.show()
 
 
 if __name__ == "__main__":

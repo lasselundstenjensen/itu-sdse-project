@@ -1,7 +1,7 @@
 """
-Deployment Module
+Deployment Module for Image Classification
 
-Handles model deployment and stage transitions in MLflow.
+Handles model deployment and stage transitions in MLflow for PyTorch CNN model.
 """
 
 import sys

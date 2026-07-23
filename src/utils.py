@@ -1,17 +1,18 @@
 """
-Utility Functions for the MLOps Pipeline
+Utility Functions for the Image Classification MLOps Pipeline
 
-Shared helper functions used across multiple modules.
+Shared helper functions used across multiple modules for image processing and PyTorch support.
 """
 
 import warnings
 from pprint import pprint
-from typing import Literal
+from typing import Dict, List, Literal, Tuple
+from pathlib import Path
 
 import numpy as np
 import pandas as pd
-
-from .config import IMPUTATION_METHOD
+import torch
+from PIL import Image
 
 # =============================================================================
 # GLOBAL CONFIGURATION
@@ -25,106 +26,168 @@ pd.set_option("display.float_format", lambda x: "%.3f" % x)
 
 
 # =============================================================================
-# DESCRIPTIVE STATISTICS
+# IMAGE UTILITIES
 # =============================================================================
 
-def describe_numeric_col(x: pd.Series) -> pd.Series:
+def calculate_image_statistics(data_loader: torch.utils.data.DataLoader) -> Dict[str, List[float]]:
     """
-    Calculate descriptive statistics for a numeric column.
+    Calculate mean and standard deviation per channel for a dataset.
+
+    Useful for normalization and understanding data distribution.
 
     Parameters
     ----------
-    x : pd.Series
-        Pandas column to describe.
+    data_loader : torch.utils.data.DataLoader
+        DataLoader with image batches.
 
     Returns
     -------
-    pd.Series
-        Pandas series with descriptive stats including:
-        - Count: Number of non-null values
-        - Missing: Number of null values
-        - Mean: Mean of the column
-        - Min: Minimum value
-        - Max: Maximum value
+    Dict[str, List[float]]
+        Dictionary with 'mean' and 'std' keys, each containing a list of 3 values
+        (one per RGB channel).
     """
-    return pd.Series(
-        [x.count(), x.isnull().count(), x.mean(), x.min(), x.max()],
-        index=["Count", "Missing", "Mean", "Min", "Max"],
-    )
+    print("Calculating image statistics...")
+
+    total_mean = np.zeros(3)  # RGB channels
+    total_std = np.zeros(3)
+    total_samples = 0
+
+    for images, _ in data_loader:
+        # Convert to numpy
+        batch_images = images.numpy()
+        batch_size = batch_images.shape[0]
+        
+        # Reshape to (batch_size, 3, -1) for channel-wise stats
+        batch_images = batch_images.transpose(0, 2, 3, 1).reshape(batch_size, -1, 3)
+        
+        # Calculate mean and std for each channel
+        batch_mean = batch_images.mean(axis=1)
+        batch_std = batch_images.std(axis=1)
+        
+        total_mean += batch_mean.sum(axis=0)
+        total_std += batch_std.sum(axis=0)
+        total_samples += batch_size
+
+    # Calculate overall mean and std
+    overall_mean = (total_mean / total_samples).tolist()
+    overall_std = (total_std / total_samples).tolist()
+
+    print(f"Image statistics: Mean={overall_mean}, Std={overall_std}")
+    
+    return {
+        "mean": overall_mean,
+        "std": overall_std,
+        "total_samples": total_samples,
+    }
 
 
-# =============================================================================
-# MISSING VALUE HANDLING
-# =============================================================================
-
-def impute_missing_values(
-    x: pd.Series, method: Literal["mean", "median"] = IMPUTATION_METHOD
-) -> pd.Series:
+def verify_image_dataset(image_paths: List[Path]) -> Dict[str, int]:
     """
-    Impute missing values in a pandas Series.
+    Verify all images in a directory are valid.
 
-    For numeric columns (float64, int64):
-        - mean: Fill with the column mean
-        - median: Fill with the column median
-
-    For non-numeric columns (object, category):
-        - Fill with the mode (most frequent value)
+    Checks that all images can be loaded and are not corrupt.
 
     Parameters
     ----------
-    x : pd.Series
-        Pandas column to impute.
-    method : {"mean", "median"}, default="mean"
-        Imputation method for numeric columns.
-        Non-numeric columns always use mode.
+    image_paths : List[Path]
+        List of paths to image files to verify.
 
     Returns
     -------
-    pd.Series
-        Series with missing values imputed.
+    Dict[str, int]
+        Dictionary with counts of valid, corrupt, and missing images.
     """
-    if (x.dtype == "float64") | (x.dtype == "int64"):
-        if method == "mean":
-            return x.fillna(x.mean())
-        else:  # median
-            return x.fillna(x.median())
-    else:
-        # For categorical/object columns, use mode
-        return x.fillna(x.mode()[0])
+    print(f"Verifying {len(image_paths)} images...")
+
+    result = {
+        "valid": 0,
+        "corrupt": 0,
+        "missing": 0,
+        "corrupt_files": [],
+        "missing_files": [],
+    }
+
+    for image_path in image_paths:
+        try:
+            with Image.open(image_path) as img:
+                img.verify()
+            result["valid"] += 1
+        except FileNotFoundError:
+            result["missing"] += 1
+            result["missing_files"].append(image_path.name)
+        except (IOError, SyntaxError):
+            result["corrupt"] += 1
+            result["corrupt_files"].append(image_path.name)
+
+    print(f"Verification complete:")
+    print(f"  Valid: {result['valid']}")
+    print(f"  Corrupt: {result['corrupt']}")
+    print(f"  Missing: {result['missing']}")
+
+    return result
 
 
-# =============================================================================
-# FEATURE ENGINEERING
-# =============================================================================
-
-def create_dummy_cols(df: pd.DataFrame, col: str) -> pd.DataFrame:
+def count_classes(labels: List[int]) -> Dict[int, int]:
     """
-    Create one-hot encoded columns for a categorical column.
+    Count samples per class in a dataset.
 
-    Uses pd.get_dummies with drop_first=True to avoid the dummy variable trap.
+    Parameters
+    ----------
+    labels : List[int]
+        List of class labels.
+
+    Returns
+    -------
+    Dict[int, int]
+        Dictionary mapping class indices to their counts.
+    """
+    unique, counts = np.unique(labels, return_counts=True)
+    return dict(zip(unique, counts))
+
+
+def tensor_to_numpy(tensor: torch.Tensor) -> np.ndarray:
+    """
+    Convert PyTorch tensor to NumPy array.
+
+    Parameters
+    ----------
+    tensor : torch.Tensor
+        PyTorch tensor to convert.
+
+    Returns
+    -------
+    np.ndarray
+        Converted NumPy array.
+    """
+    if isinstance(tensor, torch.Tensor):
+        return tensor.detach().cpu().numpy()
+    return np.array(tensor)
+
+
+def check_metadata_columns(df: pd.DataFrame, columns: list[str], name: str = "Metadata") -> None:
+    """
+    Check that specified columns exist in a metadata DataFrame.
 
     Parameters
     ----------
     df : pd.DataFrame
-        DataFrame containing the column to encode.
-    col : str
-        Name of the categorical column to encode.
+        DataFrame to check.
+    columns : list[str]
+        List of column names to verify.
+    name : str, default="Metadata"
+        Name to use in error message.
 
-    Returns
-    -------
-    pd.DataFrame
-        DataFrame with the original column replaced by one-hot encoded columns.
+    Raises
+    ------
+    ValueError
+        If any column is missing.
     """
-    # Create dummy variables with drop_first to avoid multicollinearity
-    df_dummies = pd.get_dummies(df[col], prefix=col, drop_first=True)
-
-    # Concatenate with original dataframe
-    new_df = pd.concat([df, df_dummies], axis=1)
-
-    # Drop the original column
-    new_df = new_df.drop(col, axis=1)
-
-    return new_df
+    missing_cols = [col for col in columns if col not in df.columns]
+    if missing_cols:
+        raise ValueError(
+            f"Missing columns in {name}: {missing_cols}. "
+            f"Available columns: {list(df.columns)}"
+        )
 
 
 # =============================================================================
@@ -154,6 +217,9 @@ def check_dataframe_not_empty(df: pd.DataFrame, name: str = "DataFrame") -> None
 def check_columns_exist(df: pd.DataFrame, columns: list[str], name: str = "Data") -> None:
     """
     Check that specified columns exist in a DataFrame.
+    
+    Note: This function is kept for backward compatibility but check_metadata_columns
+    should be used for metadata validation in the image classification pipeline.
 
     Parameters
     ----------
@@ -216,18 +282,24 @@ if __name__ == "__main__":
     """Test utility functions when run directly."""
     print("Testing utility functions...")
 
-    # Test describe_numeric_col
-    test_series = pd.Series([1, 2, 3, 4, 5, np.nan])
-    print("\nTest describe_numeric_col:")
-    print(describe_numeric_col(test_series))
+    # Test count_classes
+    test_labels = [0, 1, 0, 1, 0, 1, 0]
+    print("\nTest count_classes:")
+    class_counts = count_classes(test_labels)
+    print(class_counts)
 
-    # Test impute_missing_values
-    print("\nTest impute_missing_values (mean):")
-    print(impute_missing_values(test_series, method="mean"))
+    # Test tensor_to_numpy
+    test_tensor = torch.tensor([1.0, 2.0, 3.0])
+    print("\nTest tensor_to_numpy:")
+    print(tensor_to_numpy(test_tensor))
 
-    # Test create_dummy_cols
-    test_df = pd.DataFrame({"category": ["A", "B", "A", "C"]})
-    print("\nTest create_dummy_cols:")
-    print(create_dummy_cols(test_df, "category"))
+    # Test check_metadata_columns
+    test_df = pd.DataFrame({"filename": ["a.jpg", "b.jpg"], "class": [0, 1], "batch_id": ["B1", "B2"]})
+    print("\nTest check_metadata_columns:")
+    try:
+        check_metadata_columns(test_df, ["filename", "class"])
+        print("Metadata columns check passed!")
+    except ValueError as e:
+        print(f"Error: {e}")
 
     print("\nAll utility function tests passed!")
