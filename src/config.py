@@ -67,14 +67,14 @@ RANDOM_STATE = 42
 # =============================================================================
 
 # Image specifications
-IMAGE_SIZE = (224, 224)  # Updated for better feature extraction with 1600x768 source images
+IMAGE_SIZE = (64, 64)  # Balanced between quality and training speed for 1600x768 source images
 ORIGINAL_IMAGE_SIZE = (1600, 768)  # Native resolution of ICPR 2024 dataset
 NUM_CLASSES = 2
 
 # Training configuration
 BATCH_SIZE = 32
-NUM_EPOCHS = 50
-LEARNING_RATE = 0.001
+NUM_EPOCHS = 10
+LEARNING_RATE = 0.0001
 
 # Transform parameters (ImageNet statistics)
 TRANSFORM_MEAN = [0.485, 0.456, 0.406]

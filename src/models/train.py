@@ -74,8 +74,8 @@ class SimpleCNN(nn.Module):
     Simple CNN model for binary classification of glass vial images.
     
     Architecture:
-    - 3 convolutional layers with max pooling
-    - 2 fully connected layers with dropout
+    - 2 convolutional layers (32 and 64 filters) with max pooling
+    - 1 fully connected layer (256 units) with dropout
     - Sigmoid output for binary classification
     
     Input: 224x224 RGB images (3 channels) - resized from native 1600x768
@@ -84,22 +84,21 @@ class SimpleCNN(nn.Module):
 
     def __init__(self):
         super(SimpleCNN, self).__init__()
-        # Convolutional layers
+        # Convolutional layers (simplified: 2 layers instead of 3)
         self.conv1 = nn.Conv2d(3, 32, kernel_size=3, stride=1, padding=1)
         self.conv2 = nn.Conv2d(32, 64, kernel_size=3, stride=1, padding=1)
-        self.conv3 = nn.Conv2d(64, 128, kernel_size=3, stride=1, padding=1)
         
         # Max pooling
         self.pool = nn.MaxPool2d(kernel_size=2, stride=2)
         
         # Fully connected layers
-        # After 3 max pooling layers: 224x224 -> 112x112 -> 56x56 -> 28x28
-        self.fc1 = nn.Linear(128 * 28 * 28, 512)  # Updated for 224x224 input
-        self.fc2 = nn.Linear(512, 1)
+        # After 2 max pooling layers: 64x64 -> 32x32 -> 16x16
+        self.fc1 = nn.Linear(64 * 16 * 16, 128)  # For 64x64 input
+        self.fc2 = nn.Linear(128, 1)
         
         # Activation and regularization
         self.relu = nn.ReLU()
-        self.dropout = nn.Dropout(0.5)
+        self.dropout = nn.Dropout(0.3)  # Reduced dropout
         self.sigmoid = nn.Sigmoid()
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
@@ -119,10 +118,9 @@ class SimpleCNN(nn.Module):
         # Convolutional layers with ReLU and max pooling
         x = self.pool(self.relu(self.conv1(x)))
         x = self.pool(self.relu(self.conv2(x)))
-        x = self.pool(self.relu(self.conv3(x)))
         
         # Flatten for fully connected layers
-        x = x.view(-1, 128 * 28 * 28)
+        x = x.view(-1, 64 * 16 * 16)
         
         # Fully connected layers
         x = self.relu(self.fc1(x))
@@ -322,13 +320,14 @@ def train_cnn_model(
         print(f"  Train Loss: {epoch_train_loss:.4f} | Train Acc: {epoch_train_accuracy:.4f} | Train F1: {epoch_train_f1:.4f}")
         print(f"  Val Loss: {epoch_val_loss:.4f} | Val Acc: {epoch_val_accuracy:.4f} | Val F1: {epoch_val_f1:.4f}")
 
-        # Log to MLflow
-        mlflow.log_metric("train_loss", epoch_train_loss, step=epoch)
-        mlflow.log_metric("val_loss", epoch_val_loss, step=epoch)
-        mlflow.log_metric("train_accuracy", epoch_train_accuracy, step=epoch)
-        mlflow.log_metric("val_accuracy", epoch_val_accuracy, step=epoch)
-        mlflow.log_metric("train_f1_score", epoch_train_f1, step=epoch)
-        mlflow.log_metric("val_f1_score", epoch_val_f1, step=epoch)
+        # Log to MLflow (only if run is active)
+        if mlflow.active_run():
+            mlflow.log_metric("train_loss", epoch_train_loss, step=epoch)
+            mlflow.log_metric("val_loss", epoch_val_loss, step=epoch)
+            mlflow.log_metric("train_accuracy", epoch_train_accuracy, step=epoch)
+            mlflow.log_metric("val_accuracy", epoch_val_accuracy, step=epoch)
+            mlflow.log_metric("train_f1_score", epoch_train_f1, step=epoch)
+            mlflow.log_metric("val_f1_score", epoch_val_f1, step=epoch)
 
     # Load best model weights
     if history['best_model_state'] is not None:
@@ -822,7 +821,7 @@ def save_model_artifacts(
     torch.save({
         'model_state_dict': model.state_dict(),
         'architecture': SimpleCNN.__name__,
-        'input_shape': (3, 224, 224),  # RGB 224x224 images
+        'input_shape': (3, 64, 64),  # RGB 64x64 images
         'output_shape': (1,),  # Binary classification
         'threshold': threshold,
         'num_classes': NUM_CLASSES,
@@ -883,7 +882,7 @@ def train_models(
     mlflow.log_param("learning_rate", LEARNING_RATE)
     mlflow.log_param("initial_threshold", THRESHOLD)
     mlflow.log_param("num_classes", NUM_CLASSES)
-    mlflow.log_param("image_size", "224x224")
+    mlflow.log_param("image_size", "64x64")
     mlflow.log_param("random_seed", RANDOM_STATE)
 
     # Log model architecture details

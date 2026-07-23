@@ -92,7 +92,7 @@ data/images/
 - **Total Raw Images**: 13,880 (19 images per vial × 730 vials)
 - **Total Vials**: 730
 - **Total Processed Images**: 730 (1 representative image per vial)
-- **Image Dimensions**: 1600×768 pixels (native), resized to 224×224 for model input
+- **Image Dimensions**: 1600×768 pixels (native), resized to 64×64 for model input
 - **File Format**: JPEG
 - **Color Channels**: RGB (3 channels)
 - **File Size Range**: ~500KB - 1MB per image
@@ -165,7 +165,7 @@ data/images/
 ### **Size and Resolution**
 - **Original Resolution**: 1600×768 pixels
 - **Aspect Ratio**: ~2.08:1 (landscape orientation)
-- **Model Input Resolution**: 224×224 pixels (resized with aspect ratio preservation)
+- **Model Input Resolution**: 64×64 pixels (resized with aspect ratio preservation)
 - **File Size**: ~500KB - 1MB per JPEG image
 
 ---
@@ -201,7 +201,7 @@ From the original dataset with 19 rotated images per vial, we selected **1 repre
 3. **Future Enhancement**: Could use all 19 images for more robust training
 
 ### **Resizing Strategy**
-The high-resolution images (1600×768) are resized to 224×224 for model input:
+The high-resolution images (1600×768) are resized to 64×64 for model input:
 
 - **Method**: Bilinear interpolation (default in PyTorch transforms)
 - **Aspect Ratio**: Preserved during resizing
@@ -251,7 +251,7 @@ from PIL import Image
 
 # Define transforms
 transform = transforms.Compose([
-    transforms.Resize((224, 224)),
+    transforms.Resize((64, 64)),
     transforms.ToTensor(),
     transforms.Normalize(mean=[0.485, 0.456, 0.406], 
                          std=[0.229, 0.224, 0.225])
