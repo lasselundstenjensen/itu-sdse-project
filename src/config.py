@@ -67,7 +67,8 @@ RANDOM_STATE = 42
 # =============================================================================
 
 # Image specifications
-IMAGE_SIZE = (64, 64)
+IMAGE_SIZE = (224, 224)  # Updated for better feature extraction with 1600x768 source images
+ORIGINAL_IMAGE_SIZE = (1600, 768)  # Native resolution of ICPR 2024 dataset
 NUM_CLASSES = 2
 
 # Training configuration

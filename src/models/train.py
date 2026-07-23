@@ -69,8 +69,8 @@ class SimpleCNN(nn.Module):
     - 2 fully connected layers with dropout
     - Sigmoid output for binary classification
     
-    Input: 64x64 RGB images (3 channels)
-    Output: Single value (0-1) representing probability of class 0 (good)
+    Input: 224x224 RGB images (3 channels) - resized from native 1600x768
+    Output: Single value (0-1) representing probability of class 0 (clean)
     """
 
     def __init__(self):
@@ -84,8 +84,8 @@ class SimpleCNN(nn.Module):
         self.pool = nn.MaxPool2d(kernel_size=2, stride=2)
         
         # Fully connected layers
-        # After 3 max pooling layers: 64x64 -> 32x32 -> 16x16 -> 8x8
-        self.fc1 = nn.Linear(128 * 8 * 8, 512)
+        # After 3 max pooling layers: 224x224 -> 112x112 -> 56x56 -> 28x28
+        self.fc1 = nn.Linear(128 * 28 * 28, 512)  # Updated for 224x224 input
         self.fc2 = nn.Linear(512, 1)
         
         # Activation and regularization
@@ -100,7 +100,7 @@ class SimpleCNN(nn.Module):
         Parameters
         ----------
         x : torch.Tensor
-            Input tensor of shape (batch_size, 3, 64, 64)
+            Input tensor of shape (batch_size, 3, 224, 224)
             
         Returns
         -------
@@ -113,7 +113,7 @@ class SimpleCNN(nn.Module):
         x = self.pool(self.relu(self.conv3(x)))
         
         # Flatten for fully connected layers
-        x = x.view(-1, 128 * 8 * 8)
+        x = x.view(-1, 128 * 28 * 28)
         
         # Fully connected layers
         x = self.relu(self.fc1(x))
