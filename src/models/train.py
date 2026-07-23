@@ -44,6 +44,7 @@ from ..config import (
     EXPERIMENT_NAME,
     LEARNING_RATE,
     MODEL_NAME,
+    MODEL_RESULTS_PATH,
     NUM_CLASSES,
     NUM_EPOCHS,
     PYTORCH_MODEL_PATH,
