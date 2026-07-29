@@ -43,6 +43,13 @@ ENV/
 # DVC
 .dvc/
 
+# Raw dataset files (large binary files - ICPR 2024)
+data/Clean/
+data/Glass/
+data/Plastic/
+data/Rubber/
+data/Sand/
+
 # MLflow
 mlruns/
 

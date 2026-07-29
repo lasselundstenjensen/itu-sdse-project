@@ -1,16 +1,19 @@
 """
-MLOps Pipeline Orchestration
+Image Classification MLOps Pipeline Orchestration
 
-Main pipeline script that orchestrates the complete ML workflow:
-1. Data Fetching
-2. Data Preprocessing
-3. Feature Engineering
-4. Model Training
+Main pipeline script that orchestrates the complete ML workflow for glass vial image classification:
+1. Image Data Fetching
+2. Image Data Preprocessing (PyTorch DataLoaders)
+3. Feature Engineering (Image artifacts)
+4. CNN Model Training
 5. Model Registration
 6. Deployment
 """
 
 import sys
+from typing import Tuple
+from pathlib import Path
+from torch.utils.data import DataLoader
 
 from .data.fetch import fetch_and_prepare_data
 from .data.preprocess import preprocess_data
@@ -21,55 +24,65 @@ from .deployment.deploy import deploy_model
 from .utils import print_section_header
 
 
-def run_data_pipeline(data: object = None) -> object:
+def run_data_pipeline(data: object = None) -> Tuple[DataLoader, DataLoader, DataLoader]:
     """
-    Run the complete data pipeline.
+    Run the complete image data pipeline.
 
     Parameters
     ----------
-    data : pd.DataFrame, optional
-        If provided, uses this data instead of fetching from file.
+    data : List[Tuple[Path, int]], optional
+        If provided, uses this dataset instead of fetching from files.
 
     Returns
     -------
-    pd.DataFrame
-        Fully processed data ready for model training.
+    Tuple[DataLoader, DataLoader, DataLoader]
+        - Training DataLoader
+        - Validation DataLoader
+        - Test DataLoader
     """
-    print_section_header("DATA PIPELINE")
+    print_section_header("IMAGE DATA PIPELINE")
 
-    # Fetch data
+    # Fetch and prepare image data
     if data is None:
         data = fetch_and_prepare_data()
 
-    # Preprocess
-    data = preprocess_data(data)
+    # Preprocess data (creates DataLoaders)
+    train_loader, val_loader, test_loader = preprocess_data(data)
 
-    # Feature engineering
-    data = create_features(data)
+    # Create and save feature artifacts
+    create_features()
 
-    return data
+    return train_loader, val_loader, test_loader
 
 
-def run_model_pipeline(data: object = None) -> dict:
+def run_model_pipeline(
+    train_loader: DataLoader = None,
+    val_loader: DataLoader = None,
+    test_loader: DataLoader = None,
+) -> dict:
     """
-    Run the complete model pipeline.
+    Run the complete CNN model pipeline.
 
     Parameters
     ----------
-    data : pd.DataFrame, optional
-        Preprocessed data. If None, loads from file.
+    train_loader : DataLoader, optional
+        Training DataLoader. If None, loads from data pipeline.
+    val_loader : DataLoader, optional
+        Validation DataLoader. If None, loads from data pipeline.
+    test_loader : DataLoader, optional
+        Test DataLoader. If None, loads from data pipeline.
 
     Returns
     -------
     dict
-        Dictionary with trained models and registration results.
+        Dictionary with trained CNN model and registration results.
     """
-    print_section_header("MODEL PIPELINE")
+    print_section_header("CNN MODEL PIPELINE")
 
-    # Train models
-    models_result = train_models(data)
+    # Train CNN model
+    models_result = train_models(train_loader, val_loader, test_loader)
 
-    # Register models
+    # Register model
     registry_result = register_models()
 
     # Deploy model if registered
@@ -86,7 +99,7 @@ def run_model_pipeline(data: object = None) -> dict:
 
 def run_full_pipeline() -> dict:
     """
-    Run the complete end-to-end pipeline.
+    Run the complete end-to-end image classification pipeline.
 
     Combines data and model pipelines into a single workflow.
 
@@ -95,26 +108,42 @@ def run_full_pipeline() -> dict:
     dict
         Dictionary with results from both pipelines.
     """
-    print_section_header("FULL MLOPS PIPELINE")
+    print_section_header("FULL IMAGE CLASSIFICATION PIPELINE")
     print("Starting complete pipeline execution...\n")
 
     # Data pipeline
-    data = run_data_pipeline()
+    train_loader, val_loader, test_loader = run_data_pipeline()
 
     # Model pipeline
-    model_results = run_model_pipeline(data)
+    model_results = run_model_pipeline(train_loader, val_loader, test_loader)
+
+    # Get some info about the data
+    train_samples = len(train_loader.dataset)
+    val_samples = len(val_loader.dataset)
+    test_samples = len(test_loader.dataset)
 
     print("\n" + "=" * 50)
     print("PIPELINE COMPLETE")
     print("=" * 50)
     print("\nSummary:")
-    print(f"  Data shape: {data.shape}")
-    print(f"  Models trained: {list(model_results.get('models', {}).keys())}")
+    print(f"  Training samples: {train_samples}")
+    print(f"  Validation samples: {val_samples}")
+    print(f"  Test samples: {test_samples}")
+    print(f"  CNN model trained: {model_results.get('models', {}).get('cnn_model') is not None}")
     print(f"  Model registered: {model_results.get('registry', {}).get('model_details') is not None}")
     print(f"  Deployment successful: {model_results.get('registry', {}).get('deploy_success', False)}")
+    if model_results.get('models', {}).get('optimal_threshold'):
+        print(f"  Optimal threshold: {model_results['models']['optimal_threshold']:.4f}")
+    if model_results.get('models', {}).get('test_results'):
+        test_f1 = model_results['models']['test_results'].get('f1_score', 0)
+        print(f"  Test F1-score: {test_f1:.4f}")
 
     return {
-        "data": data,
+        "data": {
+            "train_loader": train_loader,
+            "val_loader": val_loader,
+            "test_loader": test_loader,
+        },
         "models": model_results,
     }
 

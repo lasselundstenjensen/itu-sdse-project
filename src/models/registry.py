@@ -114,7 +114,7 @@ def get_experiment_results(experiment_name: str = None) -> pd.DataFrame:
     return experiment_best
 
 
-def load_model_results(path: str = None) -> pd.DataFrame:
+def load_model_results(path: str = None) -> dict:
     """
     Load model results from JSON file.
 
@@ -125,9 +125,8 @@ def load_model_results(path: str = None) -> pd.DataFrame:
 
     Returns
     -------
-    pd.DataFrame
-        DataFrame with model results, indexed by model path.
-        Each row contains the weighted average metrics.
+    dict
+        Dictionary with model results and metrics.
     """
     if path is None:
         path = MODEL_RESULTS_PATH
@@ -140,13 +139,8 @@ def load_model_results(path: str = None) -> pd.DataFrame:
     with open(path, "r") as f:
         model_results = json.load(f)
 
-    # Convert to DataFrame with weighted avg metrics
-    results_df = pd.DataFrame(
-        {model: val["weighted avg"] for model, val in model_results.items()}
-    ).T
-
-    print(f"Loaded results for {len(results_df)} models")
-    return results_df
+    print(f"Loaded results for CNN model")
+    return model_results
 
 
 def get_production_model(model_name: str = None) -> dict:
@@ -193,7 +187,7 @@ def get_production_model(model_name: str = None) -> dict:
 
 
 def compare_models(
-    results_df: pd.DataFrame,
+    results: dict,
     experiment_best: pd.DataFrame,
     prod_model: dict = None,
 ) -> tuple[str, bool]:
@@ -204,8 +198,8 @@ def compare_models(
 
     Parameters
     ----------
-    results_df : pd.DataFrame
-        DataFrame with model results from local training.
+    results : dict
+        Dictionary with model results from local training.
     experiment_best : pd.DataFrame
         Best run from MLflow experiment.
     prod_model : dict, optional
@@ -219,12 +213,16 @@ def compare_models(
     """
     # Get current best model score from MLflow
     train_model_score = experiment_best.get("metrics.f1_score")
+    
+    # Also check for test_f1_score if f1_score is not available
+    if train_model_score is None:
+        train_model_score = experiment_best.get("metrics.test_f1_score")
 
     if prod_model:
         # Get production model score
         try:
             run = mlflow.get_run(prod_model["run_id"])
-            prod_model_score = run.data.metrics.get("f1_score")
+            prod_model_score = run.data.metrics.get("test_f1_score") or run.data.metrics.get("f1_score")
 
             print(f"\nComparing models:")
             print(f"  Current best (training): {train_model_score}")
@@ -305,7 +303,7 @@ def register_best_model(
 
 def register_models() -> dict:
     """
-    Complete model registration pipeline.
+    Complete model registration pipeline for PyTorch CNN model.
 
     This function combines all registration steps:
     1. Get experiment results
@@ -326,13 +324,13 @@ def register_models() -> dict:
         experiment_best = get_experiment_results()
 
         # Load model results
-        results_df = load_model_results()
+        results = load_model_results()
 
         # Get production model
         prod_model = get_production_model()
 
         # Compare and decide
-        run_id, has_prod = compare_models(results_df, experiment_best, prod_model)
+        run_id, has_prod = compare_models(results, experiment_best, prod_model)
 
         # Register if needed
         if run_id:
@@ -342,7 +340,7 @@ def register_models() -> dict:
 
         return {
             "experiment_best": experiment_best,
-            "results_df": results_df,
+            "results": results,
             "production_model": prod_model,
             "has_production": has_prod,
             "run_id": run_id,
