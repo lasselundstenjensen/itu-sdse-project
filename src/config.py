@@ -73,7 +73,7 @@ NUM_CLASSES = 2
 
 # Training configuration
 BATCH_SIZE = 32
-NUM_EPOCHS = 1
+NUM_EPOCHS = 10
 LEARNING_RATE = 0.0001
 
 # Transform parameters (ImageNet statistics)

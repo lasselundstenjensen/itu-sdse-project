@@ -1,6 +1,7 @@
 # Generated files and artifacts
 artifacts/
 mlruns/
+/data/
 
 # IDE
 .idea/
@@ -41,7 +42,9 @@ ENV/
 .ipynb_checkpoints/
 
 # DVC
-.dvc/
+.dvc/config.local
+.dvc/tmp
+.dvc/cache
 
 # Raw dataset files (large binary files - ICPR 2024)
 data/Clean/
@@ -60,3 +63,4 @@ artifacts/
 .DS_Store
 Thumbs.db
 HANDOVER**.md
+/test_metadata.csv

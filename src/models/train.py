@@ -459,7 +459,7 @@ def tune_threshold(
     model: SimpleCNN,
     val_loader: DataLoader,
     device: torch.device = DEVICE,
-    threshold_range: List[float] = [0.3, 0.4, 0.5, 0.6, 0.7],
+    threshold_range: List[float] = [0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9],
 ) -> float:
     """
     Tune classification threshold to maximize F1-score on validation set.
@@ -923,11 +923,13 @@ def train_models(
         # Save model artifacts
         save_model_artifacts(cnn_model, test_results, threshold=optimal_threshold)
 
-        # Log model to MLflow
+        # Log model to MLflow with pickle serialization
+        # Using pickle format to avoid pt2 TensorSpec requirement
         mlflow.pytorch.log_model(
             cnn_model,
             "model",
             registered_model_name=MODEL_NAME,
+            serialization_format='pickle',
         )
 
     return {
