@@ -20,7 +20,7 @@ from .data.preprocess import preprocess_data
 from .data.features import create_features
 from .models.train import train_models
 from .models.registry import register_models
-from .deployment.deploy import deploy_model
+from .deployment.deploy import deploy_model, transition_to_production, set_model_alias
 from .utils import print_section_header
 
 
@@ -59,6 +59,7 @@ def run_model_pipeline(
     train_loader: DataLoader = None,
     val_loader: DataLoader = None,
     test_loader: DataLoader = None,
+    deploy_to_production: bool = False,
 ) -> dict:
     """
     Run the complete CNN model pipeline.
@@ -71,6 +72,8 @@ def run_model_pipeline(
         Validation DataLoader. If None, loads from data pipeline.
     test_loader : DataLoader, optional
         Test DataLoader. If None, loads from data pipeline.
+    deploy_to_production : bool, default=False
+        If True, deploy the best model directly to Production after Staging.
 
     Returns
     -------
@@ -88,8 +91,21 @@ def run_model_pipeline(
     # Deploy model if registered
     if registry_result.get("model_details"):
         model_version = registry_result["model_details"].get("version", 1)
-        deploy_result = deploy_model(model_version=model_version)
+        deploy_result = deploy_model(
+            model_version=model_version,
+            transition_to_prod=deploy_to_production
+        )
         registry_result["deploy_success"] = deploy_result
+        
+        # Label the best model
+        if deploy_result:
+            set_model_alias(model_version=model_version, alias="best")
+            registry_result["model_labelled"] = True
+            
+            # Optionally transition to Production
+            if deploy_to_production:
+                prod_result = transition_to_production(model_version=model_version)
+                registry_result["production_deploy_success"] = prod_result
 
     return {
         "models": models_result,
@@ -97,11 +113,16 @@ def run_model_pipeline(
     }
 
 
-def run_full_pipeline() -> dict:
+def run_full_pipeline(deploy_to_production: bool = False) -> dict:
     """
     Run the complete end-to-end image classification pipeline.
 
     Combines data and model pipelines into a single workflow.
+
+    Parameters
+    ----------
+    deploy_to_production : bool, default=False
+        If True, deploy the best model directly to Production after Staging.
 
     Returns
     -------
@@ -115,7 +136,10 @@ def run_full_pipeline() -> dict:
     train_loader, val_loader, test_loader = run_data_pipeline()
 
     # Model pipeline
-    model_results = run_model_pipeline(train_loader, val_loader, test_loader)
+    model_results = run_model_pipeline(
+        train_loader, val_loader, test_loader,
+        deploy_to_production=deploy_to_production
+    )
 
     # Get some info about the data
     train_samples = len(train_loader.dataset)
@@ -132,6 +156,8 @@ def run_full_pipeline() -> dict:
     print(f"  CNN model trained: {model_results.get('models', {}).get('cnn_model') is not None}")
     print(f"  Model registered: {model_results.get('registry', {}).get('model_details') is not None}")
     print(f"  Deployment successful: {model_results.get('registry', {}).get('deploy_success', False)}")
+    print(f"  Model labelled as best: {model_results.get('registry', {}).get('model_labelled', False)}")
+    print(f"  Production deployment: {model_results.get('registry', {}).get('production_deploy_success', False)}")
     if model_results.get('models', {}).get('optimal_threshold'):
         print(f"  Optimal threshold: {model_results['models']['optimal_threshold']:.4f}")
     if model_results.get('models', {}).get('test_results'):
@@ -155,12 +181,26 @@ if __name__ == "__main__":
     Usage:
         python -m src.pipeline
         python src/pipeline.py
+        python src/pipeline.py --deploy-to-prod  # Deploy directly to Production
     """
+    import argparse
+    
+    parser = argparse.ArgumentParser(
+        description="Run the complete image classification MLOps pipeline"
+    )
+    parser.add_argument(
+        '--deploy-to-prod',
+        action='store_true',
+        help="Deploy the best model directly to Production after Staging",
+    )
+    
+    args = parser.parse_args()
+    
     print("Running MLOps pipeline...")
     print("=" * 50)
 
     try:
-        result = run_full_pipeline()
+        result = run_full_pipeline(deploy_to_production=args.deploy_to_prod)
         print("\nPipeline executed successfully!")
         sys.exit(0)
 

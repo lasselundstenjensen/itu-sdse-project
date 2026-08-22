@@ -147,14 +147,140 @@ def transition_to_staging(
         return False
 
 
+def transition_to_production(
+    model_name: str = None,
+    model_version: int = 1,
+    from_stage: str = "Staging",
+    archive_existing: bool = True,
+) -> bool:
+    """
+    Transition model to Production stage in MLflow.
+
+    Parameters
+    ----------
+    model_name : str, optional
+        Name of the model in MLflow. Uses MODEL_NAME from config if None.
+    model_version : int, default=1
+        Version of the model to transition.
+    from_stage : str, default="Staging"
+        Current stage the model should be in before transitioning to Production.
+    archive_existing : bool, default=True
+        Whether to archive existing versions in Production.
+
+    Returns
+    -------
+    bool
+        True if transition was successful, False otherwise.
+    """
+    if model_name is None:
+        model_name = MODEL_NAME
+
+    print_section_header("MODEL PROMOTION TO PRODUCTION")
+    print(f"Transitioning {model_name} version {model_version} to Production...")
+
+    client = MlflowClient()
+
+    # Get current model version details
+    try:
+        model_version_details = dict(
+            client.get_model_version(name=model_name, version=model_version)
+        )
+        current_stage = model_version_details.get("current_stage", "None")
+
+        if current_stage == "Production":
+            print("Model already in Production. Skipping transition.")
+            return True
+
+        if current_stage != from_stage:
+            print(f"Model is in {current_stage} stage, expected {from_stage}. Cannot transition to Production.")
+            return False
+
+        # Transition to Production
+        client.transition_model_version_stage(
+            name=model_name,
+            version=model_version,
+            stage="Production",
+            archive_existing_versions=archive_existing,
+        )
+
+        # Wait for transition to complete
+        deployment_status = wait_for_deployment(
+            model_name, model_version, stage="Production"
+        )
+
+        if deployment_status:
+            print(f"Successfully transitioned {model_name} version {model_version} to Production")
+        else:
+            print(f"Failed to transition {model_name} version {model_version} to Production")
+
+        return deployment_status
+
+    except Exception as e:
+        print(f"Error transitioning model to Production: {e}")
+        import traceback
+
+        traceback.print_exc()
+        return False
+
+
+def set_model_alias(
+    model_name: str = None,
+    model_version: int = 1,
+    alias: str = "best",
+) -> bool:
+    """
+    Set an alias for a model version in MLflow.
+
+    Aliases are useful for identifying special versions like "best", "champion", etc.
+
+    Parameters
+    ----------
+    model_name : str, optional
+        Name of the model in MLflow. Uses MODEL_NAME from config if None.
+    model_version : int, default=1
+        Version of the model to set alias for.
+    alias : str, default="best"
+        Alias to set for the model version.
+
+    Returns
+    -------
+    bool
+        True if alias was set successfully, False otherwise.
+    """
+    if model_name is None:
+        model_name = MODEL_NAME
+
+    print(f"Setting alias '{alias}' for {model_name} version {model_version}...")
+
+    client = MlflowClient()
+
+    try:
+        client.set_model_version_tag(
+            name=model_name,
+            version=model_version,
+            key="alias",
+            value=alias,
+        )
+        print(f"Successfully set alias '{alias}' for {model_name} version {model_version}")
+        return True
+
+    except Exception as e:
+        print(f"Error setting model alias: {e}")
+        import traceback
+
+        traceback.print_exc()
+        return False
+
+
 def deploy_model(
     model_name: str = None,
     model_version: int = 1,
+    transition_to_prod: bool = False,
 ) -> bool:
     """
     Complete deployment pipeline.
 
-    Transitions model from None/Archive to Staging.
+    Transitions model from None/Archive to Staging, optionally to Production.
 
     Parameters
     ----------
@@ -162,6 +288,8 @@ def deploy_model(
         Name of the model in MLflow. Uses MODEL_NAME from config if None.
     model_version : int, default=1
         Version of the model to deploy.
+    transition_to_prod : bool, default=False
+        If True, transition the model to Production after Staging.
 
     Returns
     -------
@@ -171,7 +299,17 @@ def deploy_model(
     if model_name is None:
         model_name = MODEL_NAME
 
-    return transition_to_staging(model_name, model_version)
+    # Transition to Staging first
+    staging_success = transition_to_staging(model_name, model_version)
+
+    if not staging_success:
+        return False
+
+    # Optionally transition to Production
+    if transition_to_prod:
+        return transition_to_production(model_name, model_version)
+
+    return True
 
 
 if __name__ == "__main__":
