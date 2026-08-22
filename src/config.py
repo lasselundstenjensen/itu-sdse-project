@@ -106,6 +106,41 @@ TRAIN_RATIO = 0.70
 VAL_RATIO = 0.15
 TEST_RATIO = 0.15
 
+# =============================================================================
+# DRIFT DETECTION CONFIGURATION
+# =============================================================================
+
+# Drift detection window size (number of samples to collect before checking)
+DRIFT_WINDOW_SIZE = 100
+
+# Population Stability Index (PSI) threshold for drift detection
+DRIFT_PSI_THRESHOLD = 0.2
+
+# Kolmogorov-Smirnov test p-value threshold for drift detection
+DRIFT_KS_PVALUE_THRESHOLD = 0.05
+
+# Interval between drift checks (in seconds)
+DRIFT_CHECK_INTERVAL = 60
+
+# Path to save/load baseline statistics for drift detection
+DRIFT_BASELINE_STATS_PATH = ARTIFACT_DIR / "drift_baseline_stats.json"
+
+# Path to save/load reference data for drift detection
+DRIFT_REFERENCE_DATA_PATH = ARTIFACT_DIR / "drift_reference_data.pkl"
+
+# Feature layer to extract embeddings from for drift detection
+DRIFT_FEATURE_LAYER = "fc1"
+
+# File to store the monitoring run ID
+MONITORING_RUN_ID_FILE = ARTIFACT_DIR / "monitoring_run_id.txt"
+
+# =============================================================================
+# MLFLOW SERVER CONFIGURATION
+# =============================================================================
+
+# MLflow tracking URI - local server
+MLFLOW_TRACKING_URI = "http://127.0.0.1:5000"
+
 
 if __name__ == "__main__":
     """Print configuration when run directly."""
@@ -124,3 +159,11 @@ if __name__ == "__main__":
     device = get_device()
     print(f"Device: {device}")
     print(f"Classification Threshold: {THRESHOLD}")
+    print(f"\nDrift Detection Configuration:")
+    print(f"  Window Size: {DRIFT_WINDOW_SIZE}")
+    print(f"  PSI Threshold: {DRIFT_PSI_THRESHOLD}")
+    print(f"  KS P-value Threshold: {DRIFT_KS_PVALUE_THRESHOLD}")
+    print(f"  Check Interval: {DRIFT_CHECK_INTERVAL}s")
+    print(f"  Feature Layer: {DRIFT_FEATURE_LAYER}")
+    print(f"\nMLflow Configuration:")
+    print(f"  Tracking URI: {MLFLOW_TRACKING_URI}")

@@ -229,9 +229,10 @@ def set_model_alias(
     alias: str = "best",
 ) -> bool:
     """
-    Set an alias for a model version in MLflow.
+    Set an alias for a registered model version in MLflow.
 
     Aliases are useful for identifying special versions like "best", "champion", etc.
+    This uses MLflow's registered model alias system, not tags.
 
     Parameters
     ----------
@@ -255,11 +256,10 @@ def set_model_alias(
     client = MlflowClient()
 
     try:
-        client.set_model_version_tag(
+        client.set_registered_model_alias(
             name=model_name,
-            version=model_version,
-            key="alias",
-            value=alias,
+            alias=alias,
+            version=str(model_version),
         )
         print(f"Successfully set alias '{alias}' for {model_name} version {model_version}")
         return True
