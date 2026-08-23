@@ -8,6 +8,22 @@ The `v2` branch adds a grading harness: an event engine probes each team's deplo
 
 Also worth reading: [`platform/README.md`](./platform/README.md) for how to run the mock locally, [`CLAUDE.md`](./CLAUDE.md) for the full v2 plan, and [`CLARIFY.md`](./CLARIFY.md) for the open questions.
 
+## Quick Start
+
+The project uses a **two-step workflow** for training and deployment:
+
+### Step 1: Training & Registration
+```bash
+python -m src.pipeline
+```
+
+### Step 2: Deployment & Serving
+```bash
+python -m src.deployment.deploy_and_serve
+```
+
+**See the complete documentation:** [DEPLOYMENT.md](./DEPLOYMENT.md)
+
 ## Task
 
 Based on the input provided (see below), fork the repository and restructure the code to adhere to the concepts and ideas you have seen throughout the course.  The diagram below provides a detailed overview of the structure that the solution is expected to follow.   

@@ -73,7 +73,7 @@ NUM_CLASSES = 2
 
 # Training configuration
 BATCH_SIZE = 32
-NUM_EPOCHS = 10
+NUM_EPOCHS = 3
 LEARNING_RATE = 0.0001
 
 # Transform parameters (ImageNet statistics)
@@ -135,6 +135,16 @@ DRIFT_FEATURE_LAYER = "fc1"
 MONITORING_RUN_ID_FILE = ARTIFACT_DIR / "monitoring_run_id.txt"
 
 # =============================================================================
+# INFERENCE LOGGING CONFIGURATION
+# =============================================================================
+
+# Path to the inference request log file
+INFERENCE_LOG_PATH = ARTIFACT_DIR / "inference_log.json"
+
+# Default time window for drift checking (in days)
+DRIFT_DEFAULT_DAYS = 7
+
+# =============================================================================
 # MLFLOW SERVER CONFIGURATION
 # =============================================================================
 
@@ -167,3 +177,6 @@ if __name__ == "__main__":
     print(f"  Feature Layer: {DRIFT_FEATURE_LAYER}")
     print(f"\nMLflow Configuration:")
     print(f"  Tracking URI: {MLFLOW_TRACKING_URI}")
+    print(f"\nInference Logging Configuration:")
+    print(f"  Log Path: {INFERENCE_LOG_PATH}")
+    print(f"  Drift Default Days: {DRIFT_DEFAULT_DAYS}")
