@@ -19,7 +19,7 @@ python -m src.pipeline
 
 ### Step 2: Deployment & Serving
 ```bash
-python -m src.deployment.deploy_and_serve
+python -m src.serve_model
 ```
 
 **See the complete documentation:** [DEPLOYMENT.md](./DEPLOYMENT.md)

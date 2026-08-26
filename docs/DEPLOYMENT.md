@@ -39,7 +39,7 @@ This separation allows for:
                           ↓
 ┌─────────────────────────────────────────────────────────────┐
 │               Step 2: Deployment & Serving                  │
-│      (python -m src.deployment.deploy_and_serve)            │
+│      (python -m src.serve_model)                            │
 └─────────────────────────────────────────────────────────────┘
                           ↓
               Get Best Model from Registry
@@ -80,30 +80,30 @@ Deploy the best model from the registry and start the model server:
 
 ```bash
 # Basic deployment and serving (default: from registry, Staging, port 5001)
-python -m src.deployment.deploy_and_serve
+python -m src.serve_model
 
 # Deploy from Production instead of Staging
-python -m src.deployment.deploy_and_serve --stage Production
+python -m src.serve_model --stage Production
 
 # Deploy without starting server (MLflow only)
-python -m src.deployment.deploy_and_serve --no-serve
+python -m src.serve_model --no-serve
 
 # Start server in background (detached mode - doesn't hang terminal)
-python -m src.deployment.deploy_and_serve --background
+python -m src.serve_model --background
 # Or use short flag:
-python -m src.deployment.deploy_and_serve -d
+python -m src.serve_model -d
 
 # Deploy from latest experiment run instead of registry
-python -m src.deployment.deploy_and_serve --from-experiment --from-registry False
+python -m src.serve_model --from-experiment --from-registry False
 
 # Custom model name and port
-python -m src.deployment.deploy_and_serve --model-name my_model --port 8080
+python -m src.serve_model --model-name my_model --port 8080
 
 # Transition to Production after deployment
-python -m src.deployment.deploy_and_serve --transition-to-prod
+python -m src.serve_model --transition-to-prod
 
 # Skip MLflow registration (only create wrapper and log to run)
-python -m src.deployment.deploy_and_serve --no-register
+python -m src.serve_model --no-register
 ```
 
 **What happens:**
@@ -126,7 +126,7 @@ python -m src.deployment.deploy_and_serve --no-register
 
 ## Command Line Arguments
 
-### `deploy_and_serve.py` Arguments
+### `serve_model.py` Arguments
 
 | Argument | Type | Default | Description |
 |----------|------|---------|-------------|
@@ -161,7 +161,7 @@ This gives students control over when to deploy new models.
 python -m src.pipeline
 
 # Step 2: Deploy and serve in background (auto-promotes to Production)
-python -m src.deployment.deploy_and_serve --background --transition-to-prod
+python -m src.serve_model --background --transition-to-prod
 
 # Step 3: Submit predictions
 curl -X POST http://localhost:5001/invocations \
@@ -175,7 +175,7 @@ curl -X POST http://localhost:5001/invocations \
 # Step 1: Training creates new version in Staging
 python -m src.pipeline
 # Step 2: Manually deploy new version (brief ~5s interruption while server restarts)
-python -m src.deployment.deploy_and_serve --background --transition-to-prod
+python -m src.serve_model --background --transition-to-prod
 ```
 
 ### GitHub Actions
@@ -231,7 +231,7 @@ jobs:
           mlflow server --backend-store-uri sqlite:///mlflow.db --default-artifact-root ./mlruns --host 0.0.0.0 --port 5000 &
           sleep 5
       - name: Deploy and serve model
-        run: python -m src.deployment.deploy_and_serve --no-serve --transition-to-prod
+        run: python -m src.serve_model --no-serve --transition-to-prod
 ```
 
 ### Manual Approval Workflow (Recommended)
@@ -287,7 +287,7 @@ jobs:
           mlflow server --backend-store-uri sqlite:///mlflow.db --default-artifact-root ./mlruns --host 0.0.0.0 --port 5000 &
           sleep 5
       - name: Deploy to Production
-        run: python -m src.deployment.deploy_and_serve --no-serve --transition-to-prod
+        run: python -m src.serve_model --no-serve --transition-to-prod
 ```
 
 ### GitLab CI
@@ -314,7 +314,7 @@ deploy:
   script:
     - mlflow server --backend-store-uri sqlite:///mlflow.db --default-artifact-root ./mlruns --host 0.0.0.0 --port 5000 &
     - sleep 5
-    - python -m src.deployment.deploy_and_serve --no-serve
+    - python -m src.serve_model --no-serve
   needs: [train]
 ```
 
@@ -335,10 +335,10 @@ deploy:
 	@echo "Starting MLflow server..."
 	@$(MLFLOW_SERVER) &
 	@sleep 5
-	python -m src.deployment.deploy_and_serve --no-serve
+	python -m src.serve_model --no-serve
 
 serve: deploy
-	python -m src.deployment.deploy_and_serve
+	python -m src.serve_model
 
 all: train deploy serve
 ```
@@ -349,7 +349,7 @@ After deploying, you can test the model server:
 
 ```bash
 # Start the server
-python -m src.deployment.deploy_and_serve --port 5001
+python -m src.serve_model --port 5001
 
 # In another terminal, test inference
 curl -X POST http://localhost:5001/invocations \
@@ -486,7 +486,7 @@ For verbose output, set the `MLFLOW_TRACKING_URI` environment variable:
 
 ```bash
 export MLFLOW_TRACKING_URI=http://127.0.0.1:5000
-python -m src.deployment.deploy_and_serve --port 5001
+python -m src.serve_model --port 5001
 ```
 
 ## File Structure
@@ -494,10 +494,10 @@ python -m src.deployment.deploy_and_serve --port 5001
 ```
 src/
 ├── pipeline.py                    # Step 1: Training & Registration
-└── deployment/
+├── serve_model.py               # Step 2: Deployment & Serving
+├── deployment/
     ├── __init__.py               # Exports for deployment modules
     ├── deploy.py                 # Stage transitions (Staging, Production)
-    ├── deploy_and_serve.py       # Step 2: Deployment & Serving (NEW)
     ├── logging_wrapper.py        # SimpleLoggingWrapper for inference logging
     ├── deploy_monitored.py       # Alternative deployment script
     └── check_drift.py            # Drift detection CLI
@@ -505,7 +505,7 @@ src/
 
 ## Migration from Old Workflow
 
-If you were previously using `deploy_monitored.py`, the new `deploy_and_serve.py` provides:
+If you were previously using `deploy_monitored.py`, the new `serve_model.py` provides:
 
 - **Simpler workflow**: Single command for complete deployment
 - **Better separation**: Clear two-step process
