@@ -1,0 +1,25 @@
+# Build artifacts and local envs
+.venv
+venv
+.git
+.github
+.vibe
+.dvc
+.dvc/cache
+
+# Runtime data and logs (train fetches data itself; no need in context)
+data/
+logs/
+mlruns/
+*.db
+*.log
+mlflow.db
+mlflow_server.log
+
+# Notebooks and scratch
+notebooks/
+platform/
+docs/
+
+# OS
+.DS_Store

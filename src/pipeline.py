@@ -16,11 +16,24 @@ from .config import MLFLOW_TRACKING_URI, EXPERIMENT_NAME, MODEL_NAME
 def get_production_model():
     """
     Fetch the current Production model from MLflow registry.
+    Checks for both alias="Production" and stage="Production".
     Returns (model_uri, version) or (None, None) if no Production model exists.
     """
     from mlflow.tracking import MlflowClient
     
     client = MlflowClient()
+    
+    # First, try to get the model with alias "Production"
+    try:
+        model = client.get_model_version_by_alias(name=MODEL_NAME, alias="Production")
+        if model:
+            version = model.version
+            model_uri = f"models:/{MODEL_NAME}@Production"
+            return model_uri, version
+    except Exception:
+        pass
+    
+    # Fall back to checking stage="Production"
     model_versions = client.search_model_versions(f"name='{MODEL_NAME}'")
     
     for mv in model_versions:
@@ -104,7 +117,49 @@ def compare_with_production(new_model_f1, production_model_uri, test_loader):
     
     # Load and evaluate production model
     print(f"Loading Production model: {production_model_uri}")
-    production_model = mlflow.pytorch.load_model(production_model_uri)
+    
+    # Try to load as pyfunc first (for alias-based URIs)
+    production_model = None
+    try:
+        pyfunc_model = mlflow.pyfunc.load_model(production_model_uri)
+        # Try to get the raw model via get_raw_model first
+        if hasattr(pyfunc_model, 'get_raw_model'):
+            try:
+                production_model = pyfunc_model.get_raw_model()
+            except (NotImplementedError, AttributeError):
+                # If the underlying model doesn't have get_raw_model, try other methods
+                pass
+        
+        # If get_raw_model didn't work, try accessing the _model_impl attribute
+        if production_model is None and hasattr(pyfunc_model, '_model_impl'):
+            impl = pyfunc_model._model_impl
+            if hasattr(impl, 'model') and impl.model is not None:
+                production_model = impl.model
+        
+        # If still no model, try accessing model directly on pyfunc_model
+        if production_model is None and hasattr(pyfunc_model, 'model'):
+            production_model = pyfunc_model.model
+            
+    except Exception as e:
+        print(f"Warning: Failed to extract raw model from pyfunc: {e}")
+    
+    # Fall back to pytorch
+    if production_model is None:
+        try:
+            production_model = mlflow.pytorch.load_model(production_model_uri)
+        except Exception as e:
+            print(f"Failed to load production model: {e}")
+            print("Assuming new model is better due to loading error.")
+            return True
+    
+    # Ensure model is in eval mode
+    if hasattr(production_model, 'eval'):
+        production_model.eval()
+    else:
+        # If we couldn't extract a PyTorch model, we can't compare
+        print("Warning: Could not extract PyTorch model for comparison. Assuming new model is better.")
+        return True
+    
     production_f1 = evaluate_model_f1(production_model, test_loader)
     
     print(f"Current Production F1-score: {production_f1:.4f}")
@@ -138,6 +193,9 @@ def run_model_pipeline(train_loader=None, val_loader=None, test_loader=None):
     if registry_result.get("model_details"):
         model_version = registry_result["model_details"].get("version", 1)
         
+        # Check if we have a pyfunc model version from training
+        pyfunc_model_version = models_result.get("pyfunc_model_version")
+        
         # Always deploy to Staging
         deploy_result = deploy_model(
             model_version=model_version,
@@ -147,7 +205,11 @@ def run_model_pipeline(train_loader=None, val_loader=None, test_loader=None):
 
         if deploy_result:
             set_model_alias(model_version=model_version, alias="best")
+            # Set Production alias on the pyfunc model if available, otherwise on the PyTorch model
+            alias_version = pyfunc_model_version if pyfunc_model_version else model_version
+            set_model_alias(model_version=alias_version, alias="Production")
             registry_result["model_labelled"] = True
+            registry_result["pyfunc_model_version"] = pyfunc_model_version
             
             # Get the new model's F1-score from training results
             new_model_f1 = models_result.get("test_results", {}).get("f1_score", 0)

@@ -45,6 +45,20 @@ def transition_to_staging(model_name=None, model_version=1, archive_existing=Tru
         archive_existing_versions=archive_existing,
     )
 
+    # Add tags for staging deployment
+    client.set_model_version_tag(
+        name=model_name,
+        version=model_version,
+        key="deployed_to",
+        value="staging",
+    )
+    client.set_model_version_tag(
+        name=model_name,
+        version=model_version,
+        key="task",
+        value="classification",
+    )
+
     deployment_status = wait_for_deployment(model_name, model_version, stage="Staging")
 
     if deployment_status:
@@ -69,6 +83,20 @@ def transition_to_production(model_name=None, model_version=1, from_stage="Stagi
         version=model_version,
         stage="Production",
         archive_existing_versions=archive_existing,
+    )
+
+    # Add tags for production deployment
+    client.set_model_version_tag(
+        name=model_name,
+        version=model_version,
+        key="deployed_to",
+        value="production",
+    )
+    client.set_model_version_tag(
+        name=model_name,
+        version=model_version,
+        key="task",
+        value="classification",
     )
 
     deployment_status = wait_for_deployment(model_name, model_version, stage="Production")
