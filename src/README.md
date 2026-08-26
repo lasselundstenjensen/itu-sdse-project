@@ -42,8 +42,8 @@ This directory contains documentation for the MLflow monitoring and serving pipe
 ## Quick Start
 
 ### Prerequisites
-- MLflow server running on `127.0.0.1:5002`
-- Python 3.14+ with all dependencies installed
+- MLflow server running on `127.0.0.1:5000`
+- Python 3.13+ with all dependencies installed
 - Data available in `data/images/raw/` with `data/images/metadata.csv`
 
 ### Run the Complete Pipeline
@@ -85,6 +85,11 @@ response = requests.post(
     "http://localhost:5001/invocations",
     json={"instances": ["data/images/raw/Clean_001.jpg"]}
 )
+# Note: a path works only where the file exists locally. For containerized
+# serving, send the image as base64-encoded bytes instead:
+#   import base64
+#   b64 = base64.b64encode(open("data/images/raw/Clean_001.jpg","rb").read()).decode()
+#   json={"instances": [b64]}
 
 result = response.json()
 print(f"Predictions: {result['predictions']}")
@@ -103,7 +108,7 @@ All drift detection and monitoring parameters are configured here.
 - `DRIFT_KS_PVALUE_THRESHOLD = 0.05` - KS test p-value threshold
 - `DRIFT_CHECK_INTERVAL = 60` - Seconds between monitoring checks
 - `DRIFT_FEATURE_LAYER = "fc1"` - Layer for embedding extraction
-- `MLFLOW_TRACKING_URI = "http://127.0.0.1:5002"` - MLflow server URI
+- `MLFLOW_TRACKING_URI = "http://127.0.0.1:5000"` - MLflow server URI
 
 ### 2. Drift Detector (src/deployment/drift_detector.py)
 
@@ -249,7 +254,7 @@ Adjust these in `src/config.py`:
 ### Common Issues
 
 1. **Model Server Fails to Start**
-   - Check MLflow server: `mlflow server --host 127.0.0.1 --port 5002`
+   - Check MLflow server: `mlflow server --host 127.0.0.1 --port 5000`
    - Check port: `lsof -i :5001`
    - Verify model URI: `models:/{model_name}/latest`
 

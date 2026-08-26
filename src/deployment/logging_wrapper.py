@@ -241,22 +241,36 @@ class SimpleLoggingWrapper(mlflow.pyfunc.PythonModel):
         # Handle bytes input
         if isinstance(image_input, bytes):
             image = Image.open(BytesIO(image_input)).convert('RGB')
-        # Handle string input - try base64 first, then path
+        # Handle string input - check for an existing file path first (cheap and
+        # unambiguous), then fall back to base64. Checking the path first avoids
+        # b64decode silently mangling paths like "/tmp/Clean_001.jpg" into garbage
+        # bytes that Image.open then rejects with an error we would otherwise miss.
+        # NOTE: a base64 blob can be long enough that Path(...).exists() raises
+        # OSError ("File name too long") on some platforms (Python 3.13 / macOS),
+        # so that case must fall through to base64 rather than propagate.
         elif isinstance(image_input, str):
-            # First, try to decode as base64
+            path = None
             try:
-                decoded_bytes = base64.b64decode(image_input)
-                image = Image.open(BytesIO(decoded_bytes)).convert('RGB')
-            except (base64.binascii.Error, ValueError):
-                # Not valid base64, try as a file path
+                candidate = Path(image_input)
+                if candidate.exists():
+                    path = candidate
+            except OSError:
+                path = None
+            if path is not None:
+                image = Image.open(path).convert('RGB')
+            else:
+                # Treat as base64-encoded image data (the portable contract for
+                # containerized serving). Catch broadly: b64decode(validate=False)
+                # rarely raises, so the real failure surfaces in Image.open as
+                # UnidentifiedImageError, which is not a binascii/ValueError.
                 try:
-                    path = Path(image_input)
-                    if path.exists():
-                        image = Image.open(path).convert('RGB')
-                    else:
-                        raise FileNotFoundError(f"File not found: {image_input}")
+                    decoded_bytes = base64.b64decode(image_input)
+                    image = Image.open(BytesIO(decoded_bytes)).convert('RGB')
                 except Exception as e:
-                    raise ValueError(f"Cannot process string input '{image_input[:50]}...': not valid base64 and not a valid file path: {e}")
+                    raise ValueError(
+                        f"Cannot process string input '{image_input[:50]}...': "
+                        f"not an existing file path and not valid base64 image data: {e}"
+                    )
         # Handle Path input
         elif isinstance(image_input, Path):
             if image_input.exists():

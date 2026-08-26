@@ -11,8 +11,8 @@ LOG_FILE="./logs/model_server.log"
 # Create logs directory if it doesn't exist
 mkdir -p ./logs
 
-# Set MLflow tracking URI - assumes tracking server is running on port 5002
-export MLFLOW_TRACKING_URI=http://127.0.0.1:5002
+# Set MLflow tracking URI - assumes tracking server is running on port 5000
+export MLFLOW_TRACKING_URI=http://127.0.0.1:5000
 
 echo "Starting MLflow model server for ${MODEL_NAME} on port ${PORT}..."
 echo "Logs will be written to: ${LOG_FILE}"

@@ -7,6 +7,7 @@ All values can be modified directly in this file.
 """
 
 import datetime
+import os
 from pathlib import Path
 
 # =============================================================================
@@ -148,8 +149,8 @@ DRIFT_DEFAULT_DAYS = 7
 # MLFLOW SERVER CONFIGURATION
 # =============================================================================
 
-# MLflow tracking URI - local server
-MLFLOW_TRACKING_URI = "http://127.0.0.1:5002"
+# MLflow tracking URI - local server (overridable via MLFLOW_TRACKING_URI env var)
+MLFLOW_TRACKING_URI = os.environ.get("MLFLOW_TRACKING_URI", "http://127.0.0.1:5000")
 
 
 if __name__ == "__main__":

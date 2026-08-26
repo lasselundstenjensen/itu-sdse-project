@@ -169,7 +169,7 @@ curl -X POST http://localhost:5001/invocations \
   -d '{"instances": ["image1.jpg", "image2.jpg"]}'
 
 # View metrics in MLflow UI (tied to model's run)
-# Open http://localhost:5002, find the training run, see inference metrics
+# Open http://localhost:5000, find the training run, see inference metrics
 
 # When training new model:
 # Step 1: Training creates new version in Staging
@@ -208,7 +208,7 @@ jobs:
           pip install -r requirements.txt
       - name: Start MLflow server
         run: |
-          mlflow server --backend-store-uri sqlite:///mlflow.db --default-artifact-root ./mlruns --host 0.0.0.0 --port 5002 &
+          mlflow server --backend-store-uri sqlite:///mlflow.db --default-artifact-root ./mlruns --host 0.0.0.0 --port 5000 &
           sleep 5
       - name: Run training pipeline
         run: python -m src.pipeline
@@ -228,7 +228,7 @@ jobs:
           pip install -r requirements.txt
       - name: Start MLflow server
         run: |
-          mlflow server --backend-store-uri sqlite:///mlflow.db --default-artifact-root ./mlruns --host 0.0.0.0 --port 5002 &
+          mlflow server --backend-store-uri sqlite:///mlflow.db --default-artifact-root ./mlruns --host 0.0.0.0 --port 5000 &
           sleep 5
       - name: Deploy and serve model
         run: python -m src.serve_model --no-serve --transition-to-prod
@@ -260,7 +260,7 @@ jobs:
           pip install -r requirements.txt
       - name: Start MLflow server
         run: |
-          mlflow server --backend-store-uri sqlite:///mlflow.db --default-artifact-root ./mlruns --host 0.0.0.0 --port 5002 &
+          mlflow server --backend-store-uri sqlite:///mlflow.db --default-artifact-root ./mlruns --host 0.0.0.0 --port 5000 &
           sleep 5
       - name: Run training pipeline
         run: python -m src.pipeline
@@ -284,7 +284,7 @@ jobs:
           pip install -r requirements.txt
       - name: Start MLflow server
         run: |
-          mlflow server --backend-store-uri sqlite:///mlflow.db --default-artifact-root ./mlruns --host 0.0.0.0 --port 5002 &
+          mlflow server --backend-store-uri sqlite:///mlflow.db --default-artifact-root ./mlruns --host 0.0.0.0 --port 5000 &
           sleep 5
       - name: Deploy to Production
         run: python -m src.serve_model --no-serve --transition-to-prod
@@ -300,7 +300,7 @@ stages:
 train:
   stage: train
   script:
-    - mlflow server --backend-store-uri sqlite:///mlflow.db --default-artifact-root ./mlruns --host 0.0.0.0 --port 5002 &
+    - mlflow server --backend-store-uri sqlite:///mlflow.db --default-artifact-root ./mlruns --host 0.0.0.0 --port 5000 &
     - sleep 5
     - python -m src.pipeline
   artifacts:
@@ -312,7 +312,7 @@ train:
 deploy:
   stage: deploy
   script:
-    - mlflow server --backend-store-uri sqlite:///mlflow.db --default-artifact-root ./mlruns --host 0.0.0.0 --port 5002 &
+    - mlflow server --backend-store-uri sqlite:///mlflow.db --default-artifact-root ./mlruns --host 0.0.0.0 --port 5000 &
     - sleep 5
     - python -m src.serve_model --no-serve
   needs: [train]
@@ -323,7 +323,7 @@ deploy:
 ```makefile
 .PHONY: train deploy serve all
 
-MLFLOW_SERVER = mlflow server --backend-store-uri sqlite:///mlflow.db --default-artifact-root ./mlruns --host 0.0.0.0 --port 5002
+MLFLOW_SERVER = mlflow server --backend-store-uri sqlite:///mlflow.db --default-artifact-root ./mlruns --host 0.0.0.0 --port 5000
 
 train:
 	@echo "Starting MLflow server..."
@@ -432,7 +432,7 @@ Requests are logged to `artifacts/inference_log.json`:
 - `avg_confidence`: Average confidence score across all predictions
 
 **How to view:**
-1. Open MLflow UI at http://localhost:5002
+1. Open MLflow UI at http://localhost:5000
 2. Find the training run that produced your model
 3. Click on the run to see the metrics chart
 4. Inference metrics will appear as time-series data alongside training metrics
@@ -460,12 +460,12 @@ python -m src.deployment.check_drift --psi-threshold 0.25 --ks-threshold 0.01
 
 1. **MLflow server not running**
    ```bash
-   mlflow server --backend-store-uri sqlite:///mlflow.db --default-artifact-root ./mlruns --host 0.0.0.0 --port 5002
+   mlflow server --backend-store-uri sqlite:///mlflow.db --default-artifact-root ./mlruns --host 0.0.0.0 --port 5000
    ```
 
 2. **Model not found in registry**
    - Make sure Step 1 (training) completed successfully
-   - Check MLflow UI at `http://localhost:5002`
+   - Check MLflow UI at `http://localhost:5000`
    - Run `python -m src.pipeline` first
 
 3. **Port already in use**
@@ -485,7 +485,7 @@ python -m src.deployment.check_drift --psi-threshold 0.25 --ks-threshold 0.01
 For verbose output, set the `MLFLOW_TRACKING_URI` environment variable:
 
 ```bash
-export MLFLOW_TRACKING_URI=http://127.0.0.1:5002
+export MLFLOW_TRACKING_URI=http://127.0.0.1:5000
 python -m src.serve_model --port 5001
 ```
 

@@ -5,7 +5,7 @@ set -e
 # Adapted from Guide 2: Individual Group MLflow Servers on DigitalOcean
 
 MLFLOW_DIR="/home/mlflow"
-PORT=5002
+PORT=5000
 
 # Get public IP
 PUBLIC_IP=$(curl -s ifconfig.me)

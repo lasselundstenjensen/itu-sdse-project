@@ -5,7 +5,7 @@ set -e
 # Adapted from Guide 2: Individual Group MLflow Servers on DigitalOcean
 
 MLFLOW_DIR="$HOME/mlflow"
-PORT=5002
+PORT=5000
 
 # Create directory structure
 mkdir -p "$MLFLOW_DIR/artifacts"

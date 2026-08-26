@@ -1,0 +1,7 @@
+FROM python:3.13-slim
+WORKDIR /app
+COPY pyproject.toml .
+RUN pip install --no-cache-dir -e .
+COPY src/ ./src/
+ENV MLFLOW_TRACKING_URI=http://mlflow-tracking:5000
+CMD ["python", "-m", "src.pipeline"]

@@ -1,0 +1,44 @@
+services:
+  mlflow-tracking:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.tracking
+    ports:
+      - "5002:5000"   # local: avoid Spotify conflict
+    volumes:
+      - mlflow-data:/mlflow
+    networks:
+      - mlflow-net
+
+  mlflow-model-serve:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.model-serve
+    ports:
+      - "5001:5001"
+    environment:
+      - MLFLOW_TRACKING_URI=http://mlflow-tracking:5000
+    depends_on:
+      - mlflow-tracking
+    networks:
+      - mlflow-net
+
+  train:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.train
+    environment:
+      - MLFLOW_TRACKING_URI=http://mlflow-tracking:5000
+    depends_on:
+      - mlflow-tracking
+    networks:
+      - mlflow-net
+    profiles:
+      - train
+
+volumes:
+  mlflow-data:
+
+networks:
+  mlflow-net:
+    driver: bridge
