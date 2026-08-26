@@ -149,7 +149,7 @@ DRIFT_DEFAULT_DAYS = 7
 # =============================================================================
 
 # MLflow tracking URI - local server
-MLFLOW_TRACKING_URI = "http://127.0.0.1:5000"
+MLFLOW_TRACKING_URI = "http://127.0.0.1:5002"
 
 
 if __name__ == "__main__":

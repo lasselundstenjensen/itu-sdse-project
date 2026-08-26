@@ -5,10 +5,12 @@ Provides a minimal PyTorch model wrapper that logs inference requests to a JSON 
 This is a simplified version that separates logging from drift detection.
 """
 
+import base64
 import json
 import os
 import time
 from datetime import datetime, timezone
+from io import BytesIO
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Union
 
@@ -23,6 +25,8 @@ import numpy as np
 from ..config import (
     IMAGE_SIZE,
     THRESHOLD,
+    TRANSFORM_MEAN,
+    TRANSFORM_STD,
     INFERENCE_LOG_PATH,
     MLFLOW_TRACKING_URI,
 )
@@ -39,6 +43,10 @@ class SimpleLoggingWrapper(mlflow.pyfunc.PythonModel):
     
     No drift detection is built-in - that's handled by a separate CLI command.
     """
+    
+    def get_raw_model(self):
+        """Return the underlying PyTorch model for direct access."""
+        return self.model
     
     def __init__(
         self,
@@ -76,7 +84,7 @@ class SimpleLoggingWrapper(mlflow.pyfunc.PythonModel):
         self.transform = transforms.Compose([
             transforms.Resize(IMAGE_SIZE),
             transforms.ToTensor(),
-            transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
+            transforms.Normalize(mean=TRANSFORM_MEAN, std=TRANSFORM_STD),
         ])
         
         # Device for inference
@@ -215,21 +223,49 @@ class SimpleLoggingWrapper(mlflow.pyfunc.PythonModel):
         except Exception as e:
             print(f"Warning: Failed to log metrics to MLflow: {e}")
     
-    def preprocess_image(self, image_path: Union[str, Path]) -> torch.Tensor:
+    def preprocess_image(self, image_input: Union[str, Path, bytes]) -> torch.Tensor:
         """
         Preprocess a single image for inference.
         
         Parameters
         ----------
-        image_path : Union[str, Path]
-            Path to the image file.
+        image_input : Union[str, Path, bytes]
+            Either a path to the image file (str or Path), raw image bytes,
+            or a base64-encoded string.
             
         Returns
         -------
         torch.Tensor
-            Preprocessed image tensor.
+            Preprocessed image tensor of shape (1, C, H, W).
         """
-        image = Image.open(image_path).convert('RGB')
+        # Handle bytes input
+        if isinstance(image_input, bytes):
+            image = Image.open(BytesIO(image_input)).convert('RGB')
+        # Handle string input - try base64 first, then path
+        elif isinstance(image_input, str):
+            # First, try to decode as base64
+            try:
+                decoded_bytes = base64.b64decode(image_input)
+                image = Image.open(BytesIO(decoded_bytes)).convert('RGB')
+            except (base64.binascii.Error, ValueError):
+                # Not valid base64, try as a file path
+                try:
+                    path = Path(image_input)
+                    if path.exists():
+                        image = Image.open(path).convert('RGB')
+                    else:
+                        raise FileNotFoundError(f"File not found: {image_input}")
+                except Exception as e:
+                    raise ValueError(f"Cannot process string input '{image_input[:50]}...': not valid base64 and not a valid file path: {e}")
+        # Handle Path input
+        elif isinstance(image_input, Path):
+            if image_input.exists():
+                image = Image.open(image_input).convert('RGB')
+            else:
+                raise FileNotFoundError(f"File not found: {image_input}")
+        else:
+            raise TypeError(f"Unsupported image input type: {type(image_input)}. Expected str, Path, or bytes.")
+        
         return self.transform(image).unsqueeze(0)
     
     def predict(self, context, model_input):
@@ -245,13 +281,19 @@ class SimpleLoggingWrapper(mlflow.pyfunc.PythonModel):
         model_input : Any
             Input data. Can be:
             - Path to a single image (str or Path)
-            - List of paths to images
-            - Dictionary with 'data' key containing image paths
+            - Raw image bytes
+            - List of paths or bytes
+            - Dictionary with 'data' or 'instances' key containing image paths or bytes
             
         Returns
         -------
-        Any
-            Prediction results with request logging.
+        Dict
+            Prediction results with:
+            - predictions: List of class predictions (0 or 1)
+            - confidences: List of raw probability scores
+            - raw_outputs: List of raw model outputs
+            - timestamp: ISO timestamp of the request
+            - num_samples: Number of images processed
         """
         start_time = time.time()
         
@@ -260,69 +302,78 @@ class SimpleLoggingWrapper(mlflow.pyfunc.PythonModel):
         
         # Handle different input formats
         if isinstance(model_input, dict):
-            if 'data' in model_input:
-                image_paths = model_input['data']
-            elif 'instances' in model_input:
-                image_paths = model_input['instances']
+            if 'instances' in model_input:
+                image_inputs = model_input['instances']
+            elif 'data' in model_input:
+                image_inputs = model_input['data']
             else:
-                # Try to extract paths from any key
+                # Try to extract inputs from any key
                 for key, value in model_input.items():
-                    if isinstance(value, (list, str, np.ndarray)) or isinstance(value, Path):
-                        image_paths = [value] if isinstance(value, (str, Path, np.ndarray)) else value
+                    if isinstance(value, (list, str, np.ndarray, bytes)) or isinstance(value, Path):
+                        image_inputs = [value] if isinstance(value, (str, Path, np.ndarray, bytes)) else value
                         break
                 else:
-                    raise ValueError(f"Could not extract image paths from input: {model_input}")
+                    raise ValueError(f"Could not extract image inputs from input: {model_input}")
         elif isinstance(model_input, (list, tuple, np.ndarray)):
-            image_paths = model_input
+            image_inputs = model_input
         else:
-            image_paths = [model_input]
+            image_inputs = [model_input]
         
         # Convert numpy arrays to lists
-        if isinstance(image_paths, np.ndarray):
-            image_paths = image_paths.tolist()
+        if isinstance(image_inputs, np.ndarray):
+            image_inputs = image_inputs.tolist()
         
-        # Convert to list of Paths, handling numpy strings
-        image_paths_list = []
-        for p in image_paths:
-            if isinstance(p, np.ndarray):
-                p = p.tolist() if p.ndim > 0 else str(p)
-            if isinstance(p, str):
-                image_paths_list.append(Path(p))
-            elif isinstance(p, Path):
-                image_paths_list.append(p)
+        # Convert to list of inputs, handling various types
+        image_inputs_list = []
+        for item in image_inputs:
+            # Already a list/tuple - flatten
+            if isinstance(item, (list, tuple)):
+                image_inputs_list.extend(item)
+            elif isinstance(item, np.ndarray):
+                # Handle numpy array (could be bytes or string)
+                if item.dtype == object and len(item) == 1:
+                    image_inputs_list.append(item[0])
+                else:
+                    image_inputs_list.append(item.tolist() if item.ndim > 0 else item)
             else:
-                image_paths_list.append(Path(str(p)))
-        image_paths = image_paths_list
+                # bytes, str, Path, or other types
+                image_inputs_list.append(item)
+        image_inputs = image_inputs_list
         
         # Collect results
         predictions = []
         confidences = []
+        raw_outputs = []
         log_entries = []
         
         timestamp = self._get_timestamp_iso()
         
-        # Process each image
-        for image_path in image_paths:
+        # Process each image input (can be path, bytes, etc.)
+        for image_input in image_inputs:
             try:
-                # Preprocess image
-                image_tensor = self.preprocess_image(image_path)
+                # Preprocess image (handles both paths and bytes)
+                image_tensor = self.preprocess_image(image_input)
                 image_tensor = image_tensor.to(self.device)
                 
-                # Get prediction
+                # Get raw model output
                 with torch.no_grad():
                     output = self.model(image_tensor)
                     prob = output.item()
                     pred = 1 if prob >= self.threshold else 0
                 
-                predictions.append(pred)
-                confidences.append(prob)
+                predictions.append(int(pred))
+                confidences.append(float(prob))
+                raw_outputs.append(float(prob))
                 
                 # Create log entry for this request
+                # For bytes input, use a placeholder for the image identifier
+                image_identifier = "<bytes>" if isinstance(image_input, bytes) else str(image_input)
                 log_entry = {
                     'timestamp': timestamp,
-                    'image_path': str(image_path),
+                    'image_path': image_identifier,
                     'prediction': int(pred),
                     'confidence': float(prob),
+                    'raw_output': float(prob),
                 }
                 log_entries.append(log_entry)
                 
@@ -330,15 +381,18 @@ class SimpleLoggingWrapper(mlflow.pyfunc.PythonModel):
                 self._log_request(log_entry)
                 
             except Exception as e:
-                print(f"Error processing image {image_path}: {e}")
+                print(f"Error processing image {image_input}: {e}")
                 predictions.append(None)
                 confidences.append(None)
+                raw_outputs.append(None)
                 
+                image_identifier = "<bytes>" if isinstance(image_input, bytes) else str(image_input)
                 error_log = {
                     'timestamp': timestamp,
-                    'image_path': str(image_path),
+                    'image_path': image_identifier,
                     'prediction': None,
                     'confidence': None,
+                    'raw_output': None,
                     'error': str(e),
                 }
                 log_entries.append(error_log)
@@ -364,12 +418,13 @@ class SimpleLoggingWrapper(mlflow.pyfunc.PythonModel):
             
             self._log_to_mlflow(metrics)
         
-        # Return predictions
+        # Return predictions with raw outputs
         return {
             'predictions': predictions,
             'confidences': confidences,
+            'raw_outputs': raw_outputs,
             'timestamp': timestamp,
-            'num_samples': len(image_paths),
+            'num_samples': len(image_inputs),
         }
 
 

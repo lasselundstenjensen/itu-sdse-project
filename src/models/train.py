@@ -1131,12 +1131,35 @@ def train_models(
             registered_model_name=MODEL_NAME,
             serialization_format='pickle',
         )
+        
+        # Also log a pyfunc model with the SimpleLoggingWrapper for inference
+        # This wrapper handles image bytes and paths, and returns rich predictions
+        from ..deployment.logging_wrapper import SimpleLoggingWrapper
+        wrapper = SimpleLoggingWrapper(model=cnn_model)
+        pyfunc_model_info = mlflow.pyfunc.log_model(
+            "model_pyfunc",
+            python_model=wrapper,
+            registered_model_name=MODEL_NAME,
+        )
+        
+        # Get the version of the pyfunc model we just registered
+        from mlflow.tracking import MlflowClient
+        client = MlflowClient()
+        pyfunc_model_version = pyfunc_model_info.model_uuid  # This might be the run ID, not version
+        
+        # Find the latest version of the model (should be the pyfunc model)
+        model_versions = client.search_model_versions(f"name='{MODEL_NAME}'")
+        if model_versions:
+            # Get the latest version
+            latest_version = model_versions[0].version
+            print(f"Pyfunc model registered as version: {latest_version}")
 
     return {
         "cnn_model": cnn_model,
         "training_history": training_history,
         "test_results": test_results,
         "optimal_threshold": optimal_threshold,
+        "pyfunc_model_version": latest_version if model_versions else None,
     }
 
 
