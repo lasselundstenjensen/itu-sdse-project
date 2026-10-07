@@ -143,11 +143,15 @@ jobs:
               -t $IMAGE_NAME:latest \
               .
 
+      # DO_SSH_KEY must be the private key, base64-encoded on one line:
+      #   base64 -i <private-key> | tr -d '\n'
+      # Encoding avoids multi-line secrets being mangled by the GitHub UI.
       - name: Set up SSH
         run: |
           mkdir -p ~/.ssh
-          echo "${{ secrets.DO_SSH_KEY }}" > ~/.ssh/id_ed25519
+          echo "${{ secrets.DO_SSH_KEY }}" | base64 -d > ~/.ssh/id_ed25519
           chmod 600 ~/.ssh/id_ed25519
+          ssh-keygen -y -f ~/.ssh/id_ed25519 > /dev/null
           ssh-keyscan -H ${{ secrets.DO_HOST }} >> ~/.ssh/known_hosts
 
       - name: Ship image to droplet
@@ -164,23 +168,20 @@ jobs:
           scp -r mlflow-state/* ${{ secrets.DO_USER }}@${{ secrets.DO_HOST }}:/tmp/mlflow-state/
 
       - name: Deploy on droplet
-        uses: appleboy/ssh-action@v1
-        with:
-          host: ${{ secrets.DO_HOST }}
-          username: ${{ secrets.DO_USER }}
-          key: ${{ secrets.DO_SSH_KEY }}
-          script: |
-            set -e
-            docker stop mlflow 2>/dev/null || true
-            docker rm mlflow 2>/dev/null || true
-            mkdir -p /opt/mlflow/artifacts
-            cp /tmp/mlflow-state/mlflow.db /opt/mlflow/mlflow.db
-            cp -a /tmp/mlflow-state/artifacts/. /opt/mlflow/artifacts/
-            rm -rf /tmp/mlflow-state
-            docker run -d --name mlflow --restart unless-stopped \
-                -p 5000:5000 -p 5001:5001 \
-                -v /opt/mlflow:/mlflow \
-                ${{ env.IMAGE_NAME }}:latest
+        run: |
+          ssh ${{ secrets.DO_USER }}@${{ secrets.DO_HOST }} bash -s <<'EOF'
+          set -e
+          docker stop mlflow 2>/dev/null || true
+          docker rm mlflow 2>/dev/null || true
+          mkdir -p /opt/mlflow/artifacts
+          cp /tmp/mlflow-state/mlflow.db /opt/mlflow/mlflow.db
+          cp -a /tmp/mlflow-state/artifacts/. /opt/mlflow/artifacts/
+          rm -rf /tmp/mlflow-state
+          docker run -d --name mlflow --restart unless-stopped \
+              -p 5000:5000 -p 5001:5001 \
+              -v /opt/mlflow:/mlflow \
+              ${{ env.IMAGE_NAME }}:latest
+          EOF
 
       - name: Smoke test
         run: |
