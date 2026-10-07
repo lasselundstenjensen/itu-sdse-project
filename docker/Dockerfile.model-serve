@@ -1,13 +1,30 @@
 FROM python:3.13-slim
 WORKDIR /app
-COPY pyproject.toml .
-RUN pip install --no-cache-dir -e .
+
+# CPU-only torch keeps the image small; inference on the droplet does not use CUDA
+RUN pip install --no-cache-dir torch torchvision \
+    --index-url https://download.pytorch.org/whl/cpu
+
+# Install the project package so the pickled pyfunc model
+# (src.deployment.logging_wrapper) is importable in the serving process
+COPY pyproject.toml README.md ./
 COPY src/ ./src/
-COPY artifacts/ ./artifacts/
-ENV MLFLOW_TRACKING_URI=http://mlflow-tracking:5000
-EXPOSE 5001
-CMD ["mlflow", "models", "serve", \
-    "-m", "models:/cnn_model@Production", \
-    "-p", "5001", \
-    "--host", "0.0.0.0", \
-    "--no-conda"]
+RUN pip install --no-cache-dir .
+
+# pyfunc model exported from the training run by the CI workflow
+COPY models/model /app/models/model
+
+COPY docker/entrypoint.sh /entrypoint.sh
+RUN chmod +x /entrypoint.sh
+
+# In-container tracking server (inference/drift logging destination)
+ENV MLFLOW_TRACKING_URI=http://127.0.0.1:5000 \
+    MLFLOW_SERVER_ALLOWED_HOSTS=*
+
+VOLUME /mlflow
+EXPOSE 5000 5001
+
+HEALTHCHECK --interval=30s --timeout=5s --start-period=120s --retries=5 CMD \
+    python -c "import urllib.request as u; u.urlopen('http://127.0.0.1:5001/health')" || exit 1
+
+ENTRYPOINT ["/entrypoint.sh"]

@@ -1,0 +1,188 @@
+name: Train, build and deploy model server
+
+on:
+  push:
+    branches: [main, v2-deploy-test]
+
+# Serialize deployments: consecutive runs pass MLflow state to each other
+concurrency:
+  group: mlflow-deploy
+  cancel-in-progress: false
+
+env:
+  # TODO: replace with your DigitalOcean Container Registry name
+  DO_REGISTRY: registry.digitalocean.com/your-registry-name
+  IMAGE_NAME: model-serve
+  WORKFLOW_FILE: deploy.yml
+
+jobs:
+  train:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
+      # Locate the previous run of this workflow to restore its MLflow state
+      # (mlflow.db + artifacts), so the new run is compared against the
+      # previous Production model and keeps the full run history.
+      - name: Find previous workflow run
+        id: lastrun
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const runs = await github.rest.actions.listWorkflowRuns({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              workflow_id: '${{ env.WORKFLOW_FILE }}',
+              status: 'completed',
+              per_page: 20,
+            });
+            const prev = runs.data.workflow_runs.find(r => r.id !== context.runId);
+            core.setOutput('run-id', prev ? prev.id : '');
+
+      - name: Restore MLflow state from previous run
+        id: restore
+        continue-on-error: true
+        uses: actions/download-artifact@v4
+        with:
+          name: mlflow-state
+          path: mlflow-state/
+          run-id: ${{ steps.lastrun.outputs.run-id }}
+          github-token: ${{ github.token }}
+
+      - name: Install dependencies
+        run: |
+          pip install torch torchvision --index-url https://download.pytorch.org/whl/cpu
+          pip install -e .
+
+      # Local tracking server on the runner, mirroring the droplet layout.
+      # --serve-artifacts stores artifact URIs as location-independent
+      # mlflow-artifacts:/ paths, keeping the database portable.
+      - name: Start local MLflow tracking server
+        run: |
+          mkdir -p mlflow-state/artifacts
+          mlflow server \
+              --backend-store-uri sqlite:///$PWD/mlflow-state/mlflow.db \
+              --artifacts-destination file:///$PWD/mlflow-state/artifacts \
+              --serve-artifacts \
+              --host 127.0.0.1 \
+              --port 5000 &
+          for _ in $(seq 1 60); do
+              curl -sf http://127.0.0.1:5000/health && break
+              sleep 1
+          done
+
+      - name: Run training pipeline
+        env:
+          MLFLOW_TRACKING_URI: http://127.0.0.1:5000
+        run: python -m src.pipeline
+
+      # Export the pyfunc model (SimpleLoggingWrapper) from the training run.
+      # This is the flavor that serves /invocations with image input and
+      # logs inference for drift detection - not the raw PyTorch flavor.
+      - name: Export pyfunc model
+        env:
+          MLFLOW_TRACKING_URI: http://127.0.0.1:5000
+        run: |
+          python - <<'EOF'
+          import mlflow
+
+          runs = mlflow.search_runs(
+              experiment_names=["vial_image_classification"],
+              max_results=1,
+              order_by=["start_time DESC"],
+          )
+          if runs.empty:
+              raise RuntimeError("No MLflow run found after training")
+          run_id = runs.iloc[0].run_id
+          mlflow.artifacts.download_artifacts(
+              artifact_uri=f"runs:/{run_id}/model_pyfunc",
+              dst_path="models",
+          )
+          print(f"Exported pyfunc model from run {run_id} to models/model_pyfunc")
+          EOF
+
+      - name: Upload pyfunc model
+        uses: actions/upload-artifact@v4
+        with:
+          name: pyfunc-model
+          path: models/model_pyfunc/
+          retention-days: 7
+
+      - name: Upload MLflow state
+        uses: actions/upload-artifact@v4
+        with:
+          name: mlflow-state
+          path: mlflow-state/
+          retention-days: 90
+
+  build-and-deploy:
+    needs: train
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download pyfunc model
+        uses: actions/download-artifact@v4
+        with:
+          name: pyfunc-model
+          path: models/model
+
+      - name: Download MLflow state
+        uses: actions/download-artifact@v4
+        with:
+          name: mlflow-state
+          path: mlflow-state/
+
+      - name: Build and push image
+        run: |
+          echo "${{ secrets.DO_REGISTRY_TOKEN }}" | docker login registry.digitalocean.com -u oauth2 --password-stdin
+          docker build \
+              -f docker/Dockerfile.model-serve \
+              -t $DO_REGISTRY/$IMAGE_NAME:${{ github.sha }} \
+              -t $DO_REGISTRY/$IMAGE_NAME:latest \
+              .
+          docker push --all-tags $DO_REGISTRY/$IMAGE_NAME
+
+      - name: Copy MLflow state to droplet
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.DO_SSH_KEY }}" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          ssh-keyscan -H ${{ secrets.DO_HOST }} >> ~/.ssh/known_hosts
+          ssh ${{ secrets.DO_USER }}@${{ secrets.DO_HOST }} \
+              "rm -rf /tmp/mlflow-state && mkdir -p /tmp/mlflow-state"
+          scp -r mlflow-state/* ${{ secrets.DO_USER }}@${{ secrets.DO_HOST }}:/tmp/mlflow-state/
+
+      - name: Deploy on droplet
+        uses: appleboy/ssh-action@v1
+        with:
+          host: ${{ secrets.DO_HOST }}
+          username: ${{ secrets.DO_USER }}
+          key: ${{ secrets.DO_SSH_KEY }}
+          script: |
+            set -e
+            echo "${{ secrets.DO_REGISTRY_TOKEN }}" | docker login registry.digitalocean.com -u oauth2 --password-stdin
+            docker pull ${{ env.DO_REGISTRY }}/${{ env.IMAGE_NAME }}:latest
+            docker stop mlflow 2>/dev/null || true
+            docker rm mlflow 2>/dev/null || true
+            mkdir -p /opt/mlflow/artifacts
+            cp /tmp/mlflow-state/mlflow.db /opt/mlflow/mlflow.db
+            cp -a /tmp/mlflow-state/artifacts/. /opt/mlflow/artifacts/
+            rm -rf /tmp/mlflow-state
+            docker run -d --name mlflow --restart unless-stopped \
+                -p 5000:5000 -p 5001:5001 \
+                -v /opt/mlflow:/mlflow \
+                ${{ env.DO_REGISTRY }}/${{ env.IMAGE_NAME }}:latest
+
+      - name: Smoke test
+        run: |
+          for _ in $(seq 1 30); do
+              curl -sf http://${{ secrets.DO_HOST }}:5001/health && exit 0
+              sleep 5
+          done
+          echo "Model server did not become healthy in time"
+          exit 1
