@@ -10,8 +10,6 @@ concurrency:
   cancel-in-progress: false
 
 env:
-  # TODO: replace with your DigitalOcean Container Registry name
-  DO_REGISTRY: registry.digitalocean.com/your-registry-name
   IMAGE_NAME: model-serve
   WORKFLOW_FILE: deploy.yml
 
@@ -137,22 +135,30 @@ jobs:
           name: mlflow-state
           path: mlflow-state/
 
-      - name: Build and push image
+      - name: Build image
         run: |
-          echo "${{ secrets.DO_REGISTRY_TOKEN }}" | docker login registry.digitalocean.com -u oauth2 --password-stdin
           docker build \
               -f docker/Dockerfile.model-serve \
-              -t $DO_REGISTRY/$IMAGE_NAME:${{ github.sha }} \
-              -t $DO_REGISTRY/$IMAGE_NAME:latest \
+              -t $IMAGE_NAME:${{ github.sha }} \
+              -t $IMAGE_NAME:latest \
               .
-          docker push --all-tags $DO_REGISTRY/$IMAGE_NAME
 
-      - name: Copy MLflow state to droplet
+      - name: Set up SSH
         run: |
           mkdir -p ~/.ssh
           echo "${{ secrets.DO_SSH_KEY }}" > ~/.ssh/id_ed25519
           chmod 600 ~/.ssh/id_ed25519
           ssh-keyscan -H ${{ secrets.DO_HOST }} >> ~/.ssh/known_hosts
+
+      - name: Ship image to droplet
+        run: |
+          docker save $IMAGE_NAME:latest \
+              | gzip \
+              | ssh ${{ secrets.DO_USER }}@${{ secrets.DO_HOST }} \
+                  'gunzip | docker load'
+
+      - name: Copy MLflow state to droplet
+        run: |
           ssh ${{ secrets.DO_USER }}@${{ secrets.DO_HOST }} \
               "rm -rf /tmp/mlflow-state && mkdir -p /tmp/mlflow-state"
           scp -r mlflow-state/* ${{ secrets.DO_USER }}@${{ secrets.DO_HOST }}:/tmp/mlflow-state/
@@ -165,8 +171,6 @@ jobs:
           key: ${{ secrets.DO_SSH_KEY }}
           script: |
             set -e
-            echo "${{ secrets.DO_REGISTRY_TOKEN }}" | docker login registry.digitalocean.com -u oauth2 --password-stdin
-            docker pull ${{ env.DO_REGISTRY }}/${{ env.IMAGE_NAME }}:latest
             docker stop mlflow 2>/dev/null || true
             docker rm mlflow 2>/dev/null || true
             mkdir -p /opt/mlflow/artifacts
@@ -176,7 +180,7 @@ jobs:
             docker run -d --name mlflow --restart unless-stopped \
                 -p 5000:5000 -p 5001:5001 \
                 -v /opt/mlflow:/mlflow \
-                ${{ env.DO_REGISTRY }}/${{ env.IMAGE_NAME }}:latest
+                ${{ env.IMAGE_NAME }}:latest
 
       - name: Smoke test
         run: |
