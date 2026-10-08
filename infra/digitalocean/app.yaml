@@ -1,0 +1,39 @@
+name: mlops-itu-jtk
+region: fra1
+
+# App Platform builds both images from this repository's Dockerfiles;
+# the CI runner never builds or pushes an image.
+services:
+  - name: mlflow-tracking
+    github:
+      repo: lasselundstenjensen/itu-sdse-project
+      branch: __BRANCH__  # rendered to the deploying branch by the workflow
+    dockerfile_path: docker/Dockerfile.tracking
+    instance_size_slug: basic_XXs
+    http_port: 5000
+    health_check:
+      http_path: /health
+      initial_delay_seconds: 30
+    routes:
+      - path: /
+    env:
+      - key: MLFLOW_SERVER_ALLOWED_HOSTS
+        value: "*"
+
+  - name: model-serve
+    github:
+      repo: lasselundstenjensen/itu-sdse-project
+      branch: __BRANCH__
+    dockerfile_path: docker/Dockerfile.model-serve
+    instance_size_slug: basic_XS
+    http_port: 5001
+    health_check:
+      http_path: /health
+      initial_delay_seconds: 60
+    # mlflow serves /invocations at its root, so the route forwards the
+    # full path unchanged and the endpoint works under this prefix.
+    routes:
+      - path: /invocations
+    env:
+      - key: MLFLOW_TRACKING_URI
+        value: http://mlflow-tracking:5000

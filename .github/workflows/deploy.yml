@@ -1,63 +1,41 @@
-name: Train, build and deploy model server
+name: Train and deploy model server
 
 on:
   push:
     branches: [main, v2-deploy-test]
 
-# Serialize deployments: consecutive runs pass MLflow state to each other
+permissions:
+  contents: write  # the train job commits the exported model and MLflow state
+
+# Serialize deployments: the train job builds on the state committed by
+# the previous run and pushes a new one.
 concurrency:
   group: mlflow-deploy
   cancel-in-progress: false
 
 env:
-  DO_REGISTRY: registry.digitalocean.com/mlops-itu-jtk
-  IMAGE_NAME: model-serve
-  WORKFLOW_FILE: deploy.yml
+  APP_NAME: mlops-itu-jtk
+  SPEC_PATH: infra/digitalocean/app.yaml
 
 jobs:
   train:
     runs-on: ubuntu-latest
     steps:
+      # Includes models/model and mlflow-state/ committed by the previous
+      # train run: the restored registry makes the new model compete
+      # against the previous Production model and keeps the run history.
       - uses: actions/checkout@v4
 
       - uses: actions/setup-python@v5
         with:
           python-version: "3.13"
 
-      # Locate the previous run of this workflow to restore its MLflow state
-      # (mlflow.db + artifacts), so the new run is compared against the
-      # previous Production model and keeps the full run history.
-      - name: Find previous workflow run
-        id: lastrun
-        uses: actions/github-script@v7
-        with:
-          script: |
-            const runs = await github.rest.actions.listWorkflowRuns({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              workflow_id: '${{ env.WORKFLOW_FILE }}',
-              status: 'completed',
-              per_page: 20,
-            });
-            const prev = runs.data.workflow_runs.find(r => r.id !== context.runId);
-            core.setOutput('run-id', prev ? prev.id : '');
-
-      - name: Restore MLflow state from previous run
-        id: restore
-        continue-on-error: true
-        uses: actions/download-artifact@v4
-        with:
-          name: mlflow-state
-          path: mlflow-state/
-          run-id: ${{ steps.lastrun.outputs.run-id }}
-          github-token: ${{ github.token }}
-
       - name: Install dependencies
         run: |
           pip install torch torchvision --index-url https://download.pytorch.org/whl/cpu
           pip install -e .
 
-      # Local tracking server on the runner, mirroring the droplet layout.
+      # Local tracking server on the runner, mirroring the deployed layout.
       # --serve-artifacts stores artifact URIs as location-independent
       # mlflow-artifacts:/ paths, keeping the database portable.
       - name: Start local MLflow tracking server
@@ -79,9 +57,9 @@ jobs:
           MLFLOW_TRACKING_URI: http://127.0.0.1:5000
         run: python -m src.pipeline
 
-      # Export the pyfunc model (SimpleLoggingWrapper) from the training run.
-      # This is the flavor that serves /invocations with image input and
-      # logs inference for drift detection - not the raw PyTorch flavor.
+      # Export the pyfunc model (SimpleLoggingWrapper) from the training
+      # run. This is the flavor that serves /invocations with image input
+      # and logs inference for drift detection - not the raw PyTorch flavor.
       - name: Export pyfunc model
         env:
           MLFLOW_TRACKING_URI: http://127.0.0.1:5000
@@ -101,94 +79,97 @@ jobs:
               artifact_uri=f"runs:/{run_id}/model_pyfunc",
               dst_path="models",
           )
-          print(f"Exported pyfunc model from run {run_id} to models/model_pyfunc")
+          print(f"Exported pyfunc model from run {run_id}")
           EOF
+          rm -rf models/model
+          mv models/model_pyfunc models/model
 
-      - name: Upload pyfunc model
-        uses: actions/upload-artifact@v4
-        with:
-          name: pyfunc-model
-          path: models/model_pyfunc/
-          retention-days: 7
+      # App Platform builds the images from the repository, so the model
+      # and the MLflow state must be in the repo. Pushing with the
+      # GITHUB_TOKEN does not re-trigger this workflow.
+      - name: Commit model and MLflow state
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -f models/model mlflow-state
+          git commit -m "Deploy: model and MLflow state from training run [skip ci]"
+          git push
 
-      - name: Upload MLflow state
-        uses: actions/upload-artifact@v4
-        with:
-          name: mlflow-state
-          path: mlflow-state/
-          retention-days: 90
-
-  build-and-deploy:
+  deploy:
     needs: train
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     steps:
+      # The train job pushed a new commit; check out the branch head
+      # instead of the triggering commit.
       - uses: actions/checkout@v4
-
-      - name: Download pyfunc model
-        uses: actions/download-artifact@v4
         with:
-          name: pyfunc-model
-          path: models/model
+          ref: ${{ github.ref_name }}
 
-      - name: Download MLflow state
-        uses: actions/download-artifact@v4
+      - name: Install doctl
+        uses: digitalocean/action-doctl@v2
         with:
-          name: mlflow-state
-          path: mlflow-state/
+          token: ${{ secrets.DIGITALOCEAN_ACCESS_TOKEN }}
 
-      - name: Build and push image
+      - name: Render and validate app spec
         run: |
-          echo "${{ secrets.DO_REGISTRY_TOKEN }}" \
-              | docker login $DO_REGISTRY -u oauth2 --password-stdin
-          docker build \
-              -f docker/Dockerfile.model-serve \
-              -t $DO_REGISTRY/$IMAGE_NAME:${{ github.sha }} \
-              -t $DO_REGISTRY/$IMAGE_NAME:latest \
-              .
-          docker push --all-tags $DO_REGISTRY/$IMAGE_NAME
+          sed "s/__BRANCH__/${{ github.ref_name }}/" "$SPEC_PATH" > "$RUNNER_TEMP/app.yaml"
+          doctl apps spec validate "$RUNNER_TEMP/app.yaml" > /dev/null
 
-      # DO_SSH_KEY must be the private key, base64-encoded on one line:
-      #   base64 -i <private-key> | tr -d '\n'
-      # Encoding avoids multi-line secrets being mangled by the GitHub UI.
-      - name: Set up SSH
+      - name: Create or update the app
+        id: app
         run: |
-          mkdir -p ~/.ssh
-          echo "${{ secrets.DO_SSH_KEY }}" | base64 -d > ~/.ssh/id_ed25519
-          chmod 600 ~/.ssh/id_ed25519
-          ssh-keygen -y -f ~/.ssh/id_ed25519 > /dev/null
-          ssh-keyscan -H ${{ secrets.DO_HOST }} >> ~/.ssh/known_hosts
+          app_id="$(doctl apps list --format ID,Spec.Name --no-header \
+            | awk -v name="$APP_NAME" '$2 == name { print $1 }')"
+          if [ -z "$app_id" ]; then
+            echo "Creating $APP_NAME (the first deployment starts with it)"
+            app_id="$(doctl apps create --spec "$RUNNER_TEMP/app.yaml" --format ID --no-header)"
+          else
+            echo "Updating $APP_NAME ($app_id)"
+            doctl apps update "$app_id" --spec "$RUNNER_TEMP/app.yaml" --format ID --no-header > /dev/null
+            # A spec update alone does not pick up new commits on the branch.
+            doctl apps create-deployment "$app_id" --format ID --no-header > /dev/null
+          fi
+          echo "id=$app_id" >> "$GITHUB_OUTPUT"
 
-      - name: Copy MLflow state to droplet
+      - name: Wait for deployment
+        env:
+          APP_ID: ${{ steps.app.outputs.id }}
         run: |
-          ssh ${{ secrets.DO_USER }}@${{ secrets.DO_HOST }} \
-              "rm -rf /tmp/mlflow-state && mkdir -p /tmp/mlflow-state"
-          scp -r mlflow-state/* ${{ secrets.DO_USER }}@${{ secrets.DO_HOST }}:/tmp/mlflow-state/
-
-      - name: Deploy on droplet
-        run: |
-          ssh ${{ secrets.DO_USER }}@${{ secrets.DO_HOST }} bash -s <<'EOF'
-          set -e
-          echo "${{ secrets.DO_REGISTRY_TOKEN }}" \
-              | docker login ${{ env.DO_REGISTRY }} -u oauth2 --password-stdin
-          docker pull ${{ env.DO_REGISTRY }}/${{ env.IMAGE_NAME }}:latest
-          docker stop mlflow 2>/dev/null || true
-          docker rm mlflow 2>/dev/null || true
-          mkdir -p /opt/mlflow/artifacts
-          cp /tmp/mlflow-state/mlflow.db /opt/mlflow/mlflow.db
-          cp -a /tmp/mlflow-state/artifacts/. /opt/mlflow/artifacts/
-          rm -rf /tmp/mlflow-state
-          docker run -d --name mlflow --restart unless-stopped \
-              -p 5000:5000 -p 5001:5001 \
-              -v /opt/mlflow:/mlflow \
-              ${{ env.DO_REGISTRY }}/${{ env.IMAGE_NAME }}:latest
-          docker logout ${{ env.DO_REGISTRY }}
-          EOF
+          # Phases: PENDING_BUILD, BUILDING, PENDING_DEPLOY, DEPLOYING, then
+          # ACTIVE, or ERROR / CANCELED / SUPERSEDED.
+          phase=""
+          for _ in $(seq 1 100); do
+            phase="$(doctl apps list-deployments "$APP_ID" --format Phase --no-header | head -n 1)"
+            echo "deployment phase: $phase"
+            case "$phase" in
+              ACTIVE) break ;;
+              ERROR|CANCELED|SUPERSEDED)
+                echo "::error::deployment ended in $phase"
+                doctl apps logs "$APP_ID" --type build --tail 100 || true
+                doctl apps logs "$APP_ID" --type deploy --tail 100 || true
+                exit 1 ;;
+            esac
+            sleep 15
+          done
+          if [ "$phase" != ACTIVE ]; then
+            echo "::error::deployment did not finish within 25 minutes"
+            exit 1
+          fi
 
       - name: Smoke test
+        env:
+          APP_ID: ${{ steps.app.outputs.id }}
         run: |
-          for _ in $(seq 1 30); do
-              curl -sf http://${{ secrets.DO_HOST }}:5001/health && exit 0
-              sleep 5
-          done
-          echo "Model server did not become healthy in time"
-          exit 1
+          url="$(doctl apps get "$APP_ID" --format DefaultIngress --no-header)"
+          echo "Inference endpoint: $url/invocations"
+          code="$(curl -s -o /dev/null -w '%{http_code}' \
+              -X POST "$url/invocations" \
+              -H 'Content-Type: application/json' -d '{}')"
+          if [ "$code" -ge 500 ] || [ "$code" -eq 404 ]; then
+            echo "::error::inference endpoint not reachable (HTTP $code)"
+            exit 1
+          fi
+          echo "Endpoint reachable (HTTP $code; 4xx is expected for an empty payload)"
+          echo "### Deployed: $url" >> "$GITHUB_STEP_SUMMARY"
+          echo "::notice title=Live at::$url"

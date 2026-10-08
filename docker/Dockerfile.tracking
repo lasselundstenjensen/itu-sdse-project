@@ -1,11 +1,18 @@
 FROM python:3.13-slim
 RUN pip install --no-cache-dir mlflow
-RUN mkdir -p /mlflow/artifacts
-VOLUME /mlflow
+
+# Training history committed by the CI train job. Each deploy ships the
+# full run history; inference logs accumulated since the last deploy are
+# replaced (accepted tradeoff).
+COPY mlflow-state/mlflow.db /mlflow/mlflow.db
+COPY mlflow-state/artifacts /mlflow/artifacts
+
 ENV MLFLOW_SERVER_ALLOWED_HOSTS=*
 EXPOSE 5000
+
 CMD ["mlflow", "server", \
     "--backend-store-uri", "sqlite:////mlflow/mlflow.db", \
     "--artifacts-destination", "/mlflow/artifacts", \
+    "--serve-artifacts", \
     "--host", "0.0.0.0", \
     "--port", "5000"]
