@@ -9,7 +9,7 @@ services:
       repo: Jeppe-T-K/itu-sdse-project
       branch: __BRANCH__  # rendered to the deploying branch by the workflow
     dockerfile_path: docker/Dockerfile.tracking
-    instance_size_slug: basic_XXs
+    instance_size_slug: apps-s-1vcpu-0.5gb
     http_port: 5000
     health_check:
       http_path: /health
@@ -25,7 +25,7 @@ services:
       repo: Jeppe-T-K/itu-sdse-project
       branch: __BRANCH__
     dockerfile_path: docker/Dockerfile.model-serve
-    instance_size_slug: basic_XS
+    instance_size_slug: apps-s-1vcpu-0.5gb
     http_port: 5001
     health_check:
       http_path: /health
