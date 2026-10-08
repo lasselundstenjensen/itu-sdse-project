@@ -6,7 +6,7 @@ region: fra1
 services:
   - name: mlflow-tracking
     github:
-      repo: lasselundstenjensen/itu-sdse-project
+      repo: Jeppe-T-K/itu-sdse-project
       branch: __BRANCH__  # rendered to the deploying branch by the workflow
     dockerfile_path: docker/Dockerfile.tracking
     instance_size_slug: basic_XXs
@@ -22,7 +22,7 @@ services:
 
   - name: model-serve
     github:
-      repo: lasselundstenjensen/itu-sdse-project
+      repo: Jeppe-T-K/itu-sdse-project
       branch: __BRANCH__
     dockerfile_path: docker/Dockerfile.model-serve
     instance_size_slug: basic_XS
