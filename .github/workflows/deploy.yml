@@ -10,6 +10,7 @@ concurrency:
   cancel-in-progress: false
 
 env:
+  DO_REGISTRY: registry.digitalocean.com/mlops-itu-jtk
   IMAGE_NAME: model-serve
   WORKFLOW_FILE: deploy.yml
 
@@ -135,13 +136,16 @@ jobs:
           name: mlflow-state
           path: mlflow-state/
 
-      - name: Build image
+      - name: Build and push image
         run: |
+          echo "${{ secrets.DO_REGISTRY_TOKEN }}" \
+              | docker login $DO_REGISTRY -u oauth2 --password-stdin
           docker build \
               -f docker/Dockerfile.model-serve \
-              -t $IMAGE_NAME:${{ github.sha }} \
-              -t $IMAGE_NAME:latest \
+              -t $DO_REGISTRY/$IMAGE_NAME:${{ github.sha }} \
+              -t $DO_REGISTRY/$IMAGE_NAME:latest \
               .
+          docker push --all-tags $DO_REGISTRY/$IMAGE_NAME
 
       # DO_SSH_KEY must be the private key, base64-encoded on one line:
       #   base64 -i <private-key> | tr -d '\n'
@@ -154,13 +158,6 @@ jobs:
           ssh-keygen -y -f ~/.ssh/id_ed25519 > /dev/null
           ssh-keyscan -H ${{ secrets.DO_HOST }} >> ~/.ssh/known_hosts
 
-      - name: Ship image to droplet
-        run: |
-          docker save $IMAGE_NAME:latest \
-              | gzip \
-              | ssh ${{ secrets.DO_USER }}@${{ secrets.DO_HOST }} \
-                  'gunzip | docker load'
-
       - name: Copy MLflow state to droplet
         run: |
           ssh ${{ secrets.DO_USER }}@${{ secrets.DO_HOST }} \
@@ -171,6 +168,9 @@ jobs:
         run: |
           ssh ${{ secrets.DO_USER }}@${{ secrets.DO_HOST }} bash -s <<'EOF'
           set -e
+          echo "${{ secrets.DO_REGISTRY_TOKEN }}" \
+              | docker login ${{ env.DO_REGISTRY }} -u oauth2 --password-stdin
+          docker pull ${{ env.DO_REGISTRY }}/${{ env.IMAGE_NAME }}:latest
           docker stop mlflow 2>/dev/null || true
           docker rm mlflow 2>/dev/null || true
           mkdir -p /opt/mlflow/artifacts
@@ -180,7 +180,8 @@ jobs:
           docker run -d --name mlflow --restart unless-stopped \
               -p 5000:5000 -p 5001:5001 \
               -v /opt/mlflow:/mlflow \
-              ${{ env.IMAGE_NAME }}:latest
+              ${{ env.DO_REGISTRY }}/${{ env.IMAGE_NAME }}:latest
+          docker logout ${{ env.DO_REGISTRY }}
           EOF
 
       - name: Smoke test
