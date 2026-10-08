@@ -12,6 +12,23 @@ region: fra1
 # __OWNER__ and __TAG__ are rendered by the workflow (lowercased owner and
 # the deploying commit SHA; scripts/deploy_do_app.sh renders them to
 # literals for manual use).
+# Top-level ingress rules instead of per-service routes: routes strip the
+# matched path prefix before forwarding, so /invocations reached the scoring
+# server as "/" and 404'd. preserve_path_prefix forwards the original path.
+ingress:
+  rules:
+    - component:
+        name: model-serve
+        preserve_path_prefix: true
+      match:
+        path:
+          prefix: /invocations
+    - component:
+        name: mlflow-tracking
+      match:
+        path:
+          prefix: /
+
 services:
   - name: mlflow-tracking
     image:
@@ -28,8 +45,6 @@ services:
       initial_delay_seconds: 60
       period_seconds: 10
       timeout_seconds: 10
-    routes:
-      - path: /
     envs:
       # The MLflow 3.x job-execution/scheduler machinery wedges the server
       # on App Platform after startup (readiness probe times out; verified
@@ -51,7 +66,3 @@ services:
       initial_delay_seconds: 90
       period_seconds: 10
       timeout_seconds: 10
-    # mlflow serves /invocations at its root, so the route forwards the
-    # full path unchanged and the endpoint works under this prefix.
-    routes:
-      - path: /invocations
