@@ -10,9 +10,13 @@ COPY mlflow-state/artifacts /mlflow/artifacts
 ENV MLFLOW_SERVER_ALLOWED_HOSTS=*
 EXPOSE 5000
 
+# One worker: on the 512 MiB instance, several uvicorn workers each
+# importing MLflow makes the readiness probe time out before the first
+# /health response. A single worker is ready faster and uses less memory.
 CMD ["mlflow", "server", \
     "--backend-store-uri", "sqlite:////mlflow/mlflow.db", \
     "--artifacts-destination", "/mlflow/artifacts", \
     "--serve-artifacts", \
+    "--workers", "1", \
     "--host", "0.0.0.0", \
     "--port", "5000"]

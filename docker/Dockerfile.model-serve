@@ -18,8 +18,11 @@ COPY models/model /app/models/model
 ENV MLFLOW_TRACKING_URI=http://mlflow-tracking:5000
 EXPOSE 5001
 
+# One worker: importing torch is slow and memory-heavy, and several
+# workers make the readiness probe time out on the 512 MiB instance.
 CMD ["mlflow", "models", "serve", \
     "-m", "/app/models/model", \
     "-p", "5001", \
+    "--workers", "1", \
     "--host", "0.0.0.0", \
     "--no-conda"]

@@ -23,7 +23,9 @@ services:
     http_port: 5000
     health_check:
       http_path: /health
-      initial_delay_seconds: 30
+      initial_delay_seconds: 60
+      period_seconds: 10
+      timeout_seconds: 10
     routes:
       - path: /
 
@@ -37,7 +39,9 @@ services:
     http_port: 5001
     health_check:
       http_path: /health
-      initial_delay_seconds: 60
+      initial_delay_seconds: 90
+      period_seconds: 10
+      timeout_seconds: 10
     # mlflow serves /invocations at its root, so the route forwards the
     # full path unchanged and the endpoint works under this prefix.
     routes:
