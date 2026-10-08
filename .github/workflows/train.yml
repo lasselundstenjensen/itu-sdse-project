@@ -200,4 +200,9 @@ jobs:
         run: |
           TAG="sha-${GITHUB_SHA:0:12}"
           echo "Dispatching deploy.yml on $BRANCH with tag $TAG"
-          gh workflow run deploy.yml --ref "$BRANCH" -f tag="$TAG"
+          # --repo is required: this job has no checkout, so gh cannot
+          # resolve the repository from a git repo on disk.
+          gh workflow run deploy.yml \
+              --repo "$GITHUB_REPOSITORY" \
+              --ref "$BRANCH" \
+              -f tag="$TAG"
