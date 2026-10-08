@@ -19,7 +19,9 @@ services:
       registry: ghcr.io
       repository: __OWNER__/mlflow-tracking
       tag: __TAG__
-    instance_size_slug: apps-s-1vcpu-0.5gb
+    # 1 GiB: the MLflow server OOMs at 512 MiB while building its FastAPI
+    # app (verified by running the deployed image capped at 512m locally).
+    instance_size_slug: apps-s-1vcpu-1gb-fixed
     http_port: 5000
     health_check:
       http_path: /health
@@ -35,7 +37,7 @@ services:
       registry: ghcr.io
       repository: __OWNER__/model-serve
       tag: __TAG__
-    instance_size_slug: apps-s-1vcpu-0.5gb
+    instance_size_slug: apps-s-1vcpu-1gb-fixed
     http_port: 5001
     health_check:
       http_path: /health
