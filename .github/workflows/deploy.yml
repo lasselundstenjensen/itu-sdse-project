@@ -4,13 +4,12 @@ name: Deploy to App Platform
 # Training and image building happen in train.yml; this workflow never
 # trains, so deploy methods can be iterated on without retraining.
 #
-# Triggers:
-#   - workflow_dispatch: manual, with an optional tag input (default
-#     "latest", i.e. the most recent training run's images).
-#   - workflow_run: automatically after a successful training run,
-#     deploying that run's sha-<sha> tag. GitHub only fires workflow_run
-#     when this file exists on the default branch, so while it lives on a
-#     non-default branch deploys must be started manually.
+# Deploys pre-built images from GHCR to the DigitalOcean App Platform app.
+# Training and image building happen in train.yml, which can dispatch this
+# workflow after a successful run with the tag it just pushed (opt-in via
+# its "deploy" input); this workflow can also be started manually on any
+# branch. Nothing runs on push, and it never trains, so deploy methods can
+# be iterated on without retraining.
 
 on:
   workflow_dispatch:
@@ -19,10 +18,6 @@ on:
         description: GHCR image tag to deploy (empty = latest)
         required: false
         default: latest
-  workflow_run:
-    workflows: ["Train and push images"]
-    types: [completed]
-    branches: [main, v2-deploy-test]
 
 permissions:
   contents: read
@@ -37,17 +32,14 @@ env:
 
 jobs:
   deploy:
-    # workflow_run also fires when the training run failed; deploy only
-    # on success. Manual dispatch is unaffected.
-    if: ${{ github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success' }}
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
-      # On a workflow_run trigger the default checkout ref is the default
-      # branch; check out the branch that was trained instead.
+      # Check out the branch the workflow was dispatched on, so the app
+      # spec used matches the deploy method being iterated on there.
       - uses: actions/checkout@v4
         with:
-          ref: ${{ github.event.workflow_run.head_branch || github.ref_name }}
+          ref: ${{ github.ref_name }}
 
       - name: Install doctl
         uses: digitalocean/action-doctl@v2
@@ -56,14 +48,8 @@ jobs:
 
       - name: Render and validate app spec
         run: |
-          if [ "${{ github.event_name }}" = workflow_run ]; then
-              # Deploy exactly the images the training run pushed.
-              SHA="${{ github.event.workflow_run.head_sha }}"
-              TAG="sha-${SHA:0:12}"
-          else
-              TAG="${{ github.event.inputs.tag }}"
-              : "${TAG:=latest}"
-          fi
+          TAG="${{ inputs.tag }}"
+          : "${TAG:=latest}"
           echo "Deploying tag: $TAG"
           OWNER="${GITHUB_REPOSITORY_OWNER,,}"
           sed -e "s/__TAG__/$TAG/" -e "s/__OWNER__/$OWNER/" \

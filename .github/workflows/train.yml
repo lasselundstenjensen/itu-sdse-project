@@ -1,13 +1,20 @@
 name: Train and push images
 
+# Trains, builds and (optionally) deploys - but only when started manually
+# from the Actions tab. Nothing runs on push: choose per run whether to
+# deploy after training with the "deploy" input; deploy.yml can also be
+# dispatched on its own to redeploy an existing GHCR tag without training.
 on:
-  push:
-    branches: [main, v2-deploy-test]
   workflow_dispatch:
+    inputs:
+      deploy:
+        description: Dispatch deploy.yml with the tag this run pushes
+        type: boolean
+        default: false
 
 permissions:
   contents: read
-  actions: read  # restore the MLflow state artifact from the previous run
+  actions: write  # restore the state artifact and dispatch the deploy workflow
   packages: write  # push the tracking and serving images to GHCR
 
 # Serialize training: each run builds on the MLflow state uploaded by the
@@ -175,3 +182,22 @@ jobs:
           # Public package storage is free, so old tags are kept: they give
           # a rollback target and a record of what was deployed.
           echo "Pushed $REG/mlflow-tracking and $REG/model-serve at $TAG"
+
+  # Chain the deploy workflow instead of using workflow_run, which GitHub
+  # only fires when deploy.yml exists on the default branch - it never
+  # worked from a test branch. Dispatching is exempt from the GITHUB_TOKEN
+  # no-retrigger rule, so the built-in token can start it from any branch.
+  deploy:
+    needs: build
+    if: ${{ inputs.deploy }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Trigger the deploy workflow
+        env:
+          GH_TOKEN: ${{ github.token }}
+          BRANCH: ${{ github.ref_name }}
+        run: |
+          TAG="sha-${GITHUB_SHA:0:12}"
+          echo "Dispatching deploy.yml on $BRANCH with tag $TAG"
+          gh workflow run deploy.yml --ref "$BRANCH" -f tag="$TAG"
