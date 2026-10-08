@@ -3,6 +3,7 @@ name: Train and deploy model server
 on:
   push:
     branches: [main, v2-deploy-test]
+  workflow_dispatch:
 
 permissions:
   contents: read
