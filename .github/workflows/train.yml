@@ -1,0 +1,177 @@
+name: Train and push images
+
+on:
+  push:
+    branches: [main, v2-deploy-test]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: read  # restore the MLflow state artifact from the previous run
+  packages: write  # push the tracking and serving images to GHCR
+
+# Serialize training: each run builds on the MLflow state uploaded by the
+# previous run, so two overlapping runs would race on the model registry.
+# Deploying happens in a separate workflow (deploy.yml) and can be repeated
+# against these images without retraining.
+concurrency:
+  group: mlflow-train
+  cancel-in-progress: false
+
+jobs:
+  train:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
+      - name: Install dependencies
+        run: |
+          pip install torch torchvision --index-url https://download.pytorch.org/whl/cpu
+          pip install -e .
+
+      # The MLflow state (registry db + artifacts) never enters git. It is
+      # carried between runs as a workflow artifact: restore the one the
+      # previous successful run uploaded, so the new model competes against
+      # the previous Production model and the run history accumulates.
+      - name: Restore MLflow state from the previous run
+        env:
+          GH_TOKEN: ${{ github.token }}
+          BRANCH: ${{ github.ref_name }}
+        run: |
+          mkdir -p mlflow-state/artifacts
+          # State was uploaded by this workflow before the train/deploy
+          # split, so fall back to the old deploy.yml runs once.
+          run_id="$(gh run list --workflow train.yml --branch "$BRANCH" \
+              --status success --limit 1 --json databaseId --jq '.[0].databaseId')"
+          if [ -z "$run_id" ]; then
+            run_id="$(gh run list --workflow deploy.yml --branch "$BRANCH" \
+                --status success --limit 1 --json databaseId --jq '.[0].databaseId')"
+          fi
+          if [ -z "$run_id" ]; then
+            echo "No previous run found; starting with an empty registry."
+            exit 0
+          fi
+          echo "Restoring state from run $run_id"
+          if ! gh run download "$run_id" --name mlflow-state --dir mlflow-state; then
+            echo "::error::previous run $run_id exists but its mlflow-state artifact could not be downloaded (expired?). Training from scratch would silently discard the run history and the Production model."
+            exit 1
+          fi
+          ls -la mlflow-state
+
+      # Local tracking server on the runner, mirroring the deployed layout.
+      # --serve-artifacts stores artifact URIs as location-independent
+      # mlflow-artifacts:/ paths, keeping the database portable.
+      - name: Start local MLflow tracking server
+        run: |
+          mlflow server \
+              --backend-store-uri sqlite:///$PWD/mlflow-state/mlflow.db \
+              --artifacts-destination file:///$PWD/mlflow-state/artifacts \
+              --serve-artifacts \
+              --host 127.0.0.1 \
+              --port 5000 &
+          for _ in $(seq 1 60); do
+              curl -sf http://127.0.0.1:5000/health && break
+              sleep 1
+          done
+
+      - name: Run training pipeline
+        env:
+          MLFLOW_TRACKING_URI: http://127.0.0.1:5000
+        run: python -m src.pipeline
+
+      # Export the pyfunc model (SimpleLoggingWrapper) from the training
+      # run. This is the flavor that serves /invocations with image input
+      # and logs inference for drift detection - not the raw PyTorch flavor.
+      - name: Export pyfunc model
+        env:
+          MLFLOW_TRACKING_URI: http://127.0.0.1:5000
+        run: |
+          python - <<'EOF'
+          import mlflow
+
+          runs = mlflow.search_runs(
+              experiment_names=["vial_image_classification"],
+              max_results=1,
+              order_by=["start_time DESC"],
+          )
+          if runs.empty:
+              raise RuntimeError("No MLflow run found after training")
+          run_id = runs.iloc[0].run_id
+          mlflow.artifacts.download_artifacts(
+              artifact_uri=f"runs:/{run_id}/model_pyfunc",
+              dst_path="models",
+          )
+          print(f"Exported pyfunc model from run {run_id}")
+          EOF
+          rm -rf models/model
+          mv models/model_pyfunc models/model
+          # Stop the server so SQLite flushes its WAL before upload.
+          pkill -f "mlflow server" || true
+
+      - name: Upload MLflow state
+        uses: actions/upload-artifact@v4
+        with:
+          name: mlflow-state
+          path: mlflow-state
+          retention-days: 90
+
+      - name: Upload exported model
+        uses: actions/upload-artifact@v4
+        with:
+          name: model
+          path: models/model
+          retention-days: 7
+
+  build:
+    needs: train
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      # Dockerfiles, pyproject and src package for the serving image.
+      - uses: actions/checkout@v4
+
+      - name: Download MLflow state
+        uses: actions/download-artifact@v4
+        with:
+          name: mlflow-state
+          path: mlflow-state
+
+      - name: Download exported model
+        uses: actions/download-artifact@v4
+        with:
+          name: model
+          path: models/model
+
+      # GHCR instead of DOCR: public packages are free with no storage cap,
+      # and the built-in GITHUB_TOKEN is the credential - no new secret.
+      # GHCR requires lowercase image names, hence the ${OWNER,,} expansion.
+      - name: Log in to GitHub Container Registry
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          OWNER="${GITHUB_REPOSITORY_OWNER,,}"
+          echo "$GITHUB_TOKEN" | docker login ghcr.io -u "$OWNER" --password-stdin
+
+      - name: Build and push images
+        run: |
+          TAG="sha-${GITHUB_SHA:0:12}"
+          REG="ghcr.io/${GITHUB_REPOSITORY_OWNER,,}"
+          docker build -f docker/Dockerfile.tracking \
+              -t "$REG/mlflow-tracking:$TAG" \
+              -t "$REG/mlflow-tracking:latest" .
+          docker build -f docker/Dockerfile.model-serve \
+              -t "$REG/model-serve:$TAG" \
+              -t "$REG/model-serve:latest" .
+          docker push "$REG/mlflow-tracking:$TAG"
+          docker push "$REG/mlflow-tracking:latest"
+          docker push "$REG/model-serve:$TAG"
+          docker push "$REG/model-serve:latest"
+
+          # Public package storage is free, so old tags are kept: they give
+          # a rollback target and a record of what was deployed.
+          echo "Pushed $REG/mlflow-tracking and $REG/model-serve at $TAG"
