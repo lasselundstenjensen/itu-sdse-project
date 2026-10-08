@@ -5,10 +5,12 @@ on:
     branches: [main, v2-deploy-test]
 
 permissions:
-  contents: write  # the train job commits the exported model and MLflow state
+  contents: read
+  actions: read  # restore the MLflow state artifact from the previous run
+  packages: write  # push the tracking and serving images to GHCR
 
-# Serialize deployments: the train job builds on the state committed by
-# the previous run and pushes a new one.
+# Serialize deployments: the train job builds on the state uploaded by the
+# previous run, so two overlapping runs would race on the model registry.
 concurrency:
   group: mlflow-deploy
   cancel-in-progress: false
@@ -20,10 +22,8 @@ env:
 jobs:
   train:
     runs-on: ubuntu-latest
+    timeout-minutes: 45
     steps:
-      # Includes models/model and mlflow-state/ committed by the previous
-      # train run: the restored registry makes the new model compete
-      # against the previous Production model and keeps the run history.
       - uses: actions/checkout@v4
 
       - uses: actions/setup-python@v5
@@ -35,12 +35,34 @@ jobs:
           pip install torch torchvision --index-url https://download.pytorch.org/whl/cpu
           pip install -e .
 
+      # The MLflow state (registry db + artifacts) never enters git. It is
+      # carried between runs as a workflow artifact: restore the one the
+      # previous successful run uploaded, so the new model competes against
+      # the previous Production model and the run history accumulates.
+      - name: Restore MLflow state from the previous run
+        env:
+          GH_TOKEN: ${{ github.token }}
+          BRANCH: ${{ github.ref_name }}
+        run: |
+          mkdir -p mlflow-state/artifacts
+          run_id="$(gh run list --workflow deploy.yml --branch "$BRANCH" \
+              --status success --limit 1 --json databaseId --jq '.[0].databaseId')"
+          if [ -z "$run_id" ]; then
+            echo "No previous run found; starting with an empty registry."
+            exit 0
+          fi
+          echo "Restoring state from run $run_id"
+          if ! gh run download "$run_id" --name mlflow-state --dir mlflow-state; then
+            echo "::error::previous run $run_id exists but its mlflow-state artifact could not be downloaded (expired?). Training from scratch would silently discard the run history and the Production model."
+            exit 1
+          fi
+          ls -la mlflow-state
+
       # Local tracking server on the runner, mirroring the deployed layout.
       # --serve-artifacts stores artifact URIs as location-independent
       # mlflow-artifacts:/ paths, keeping the database portable.
       - name: Start local MLflow tracking server
         run: |
-          mkdir -p mlflow-state/artifacts
           mlflow server \
               --backend-store-uri sqlite:///$PWD/mlflow-state/mlflow.db \
               --artifacts-destination file:///$PWD/mlflow-state/artifacts \
@@ -83,28 +105,78 @@ jobs:
           EOF
           rm -rf models/model
           mv models/model_pyfunc models/model
+          # Stop the server so SQLite flushes its WAL before upload.
+          pkill -f "mlflow server" || true
 
-      # App Platform builds the images from the repository, so the model
-      # and the MLflow state must be in the repo. Pushing with the
-      # GITHUB_TOKEN does not re-trigger this workflow.
-      - name: Commit model and MLflow state
+      - name: Upload MLflow state
+        uses: actions/upload-artifact@v4
+        with:
+          name: mlflow-state
+          path: mlflow-state
+          retention-days: 90
+
+      - name: Upload exported model
+        uses: actions/upload-artifact@v4
+        with:
+          name: model
+          path: models/model
+          retention-days: 7
+
+  build:
+    needs: train
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      # Dockerfiles, pyproject and src package for the serving image.
+      - uses: actions/checkout@v4
+
+      - name: Download MLflow state
+        uses: actions/download-artifact@v4
+        with:
+          name: mlflow-state
+          path: mlflow-state
+
+      - name: Download exported model
+        uses: actions/download-artifact@v4
+        with:
+          name: model
+          path: models/model
+
+      # GHCR instead of DOCR: public packages are free with no storage cap,
+      # and the built-in GITHUB_TOKEN is the credential - no new secret.
+      # GHCR requires lowercase image names, hence the ${OWNER,,} expansion.
+      - name: Log in to GitHub Container Registry
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
         run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add -f models/model mlflow-state
-          git commit -m "Deploy: model and MLflow state from training run [skip ci]"
-          git push
+          OWNER="${GITHUB_REPOSITORY_OWNER,,}"
+          echo "$GITHUB_TOKEN" | docker login ghcr.io -u "$OWNER" --password-stdin
+
+      - name: Build and push images
+        run: |
+          TAG="sha-${GITHUB_SHA:0:12}"
+          REG="ghcr.io/${GITHUB_REPOSITORY_OWNER,,}"
+          docker build -f docker/Dockerfile.tracking \
+              -t "$REG/mlflow-tracking:$TAG" \
+              -t "$REG/mlflow-tracking:latest" .
+          docker build -f docker/Dockerfile.model-serve \
+              -t "$REG/model-serve:$TAG" \
+              -t "$REG/model-serve:latest" .
+          docker push "$REG/mlflow-tracking:$TAG"
+          docker push "$REG/mlflow-tracking:latest"
+          docker push "$REG/model-serve:$TAG"
+          docker push "$REG/model-serve:latest"
+
+          # Public package storage is free, so old tags are kept: they give
+          # a rollback target and a record of what was deployed.
+          echo "Pushed $REG/mlflow-tracking and $REG/model-serve at $TAG"
 
   deploy:
-    needs: train
+    needs: build
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
-      # The train job pushed a new commit; check out the branch head
-      # instead of the triggering commit.
       - uses: actions/checkout@v4
-        with:
-          ref: ${{ github.ref_name }}
 
       - name: Install doctl
         uses: digitalocean/action-doctl@v2
@@ -113,7 +185,10 @@ jobs:
 
       - name: Render and validate app spec
         run: |
-          sed "s/__BRANCH__/${{ github.ref_name }}/" "$SPEC_PATH" > "$RUNNER_TEMP/app.yaml"
+          TAG="sha-${GITHUB_SHA:0:12}"
+          OWNER="${GITHUB_REPOSITORY_OWNER,,}"
+          sed -e "s/__TAG__/$TAG/" -e "s/__OWNER__/$OWNER/" \
+              "$SPEC_PATH" > "$RUNNER_TEMP/app.yaml"
           doctl apps spec validate "$RUNNER_TEMP/app.yaml" > /dev/null
 
       - name: Create or update the app
@@ -127,10 +202,14 @@ jobs:
           else
             echo "Updating $APP_NAME ($app_id)"
             doctl apps update "$app_id" --spec "$RUNNER_TEMP/app.yaml" --format ID --no-header > /dev/null
-            # A spec update alone does not pick up new commits on the branch.
+            # A spec update alone does not deploy the new image tag.
             doctl apps create-deployment "$app_id" --format ID --no-header > /dev/null
           fi
           echo "id=$app_id" >> "$GITHUB_OUTPUT"
+
+      - name: Remove the rendered spec
+        if: always()
+        run: rm -f "$RUNNER_TEMP/app.yaml"
 
       - name: Wait for deployment
         env:
@@ -152,7 +231,7 @@ jobs:
             esac
             sleep 15
           done
-          if [ "$phase" != ACTIVE ]; then
+          if [ "$phase" != "ACTIVE" ]; then
             echo "::error::deployment did not finish within 25 minutes"
             exit 1
           fi

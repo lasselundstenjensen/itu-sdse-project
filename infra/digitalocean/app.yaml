@@ -1,14 +1,24 @@
 name: mlops-itu-jtk
 region: fra1
 
-# App Platform builds both images from this repository's Dockerfiles;
-# the CI runner never builds or pushes an image.
+# Both components deploy pre-built images from the GitHub Container Registry
+# (ghcr.io). The GitHub Actions workflow builds and pushes them; App Platform
+# never builds from the repository, so the model and MLflow state never enter
+# git. GHCR public packages are free; App Platform pulls them without
+# credentials, so the packages must be made public once after the first push
+# (package settings -> Change visibility). Note that public means the model
+# and the MLflow history are publicly downloadable.
+#
+# __OWNER__ and __TAG__ are rendered by the workflow (lowercased owner and
+# the deploying commit SHA; scripts/deploy_do_app.sh renders them to
+# literals for manual use).
 services:
   - name: mlflow-tracking
-    github:
-      repo: Jeppe-T-K/itu-sdse-project
-      branch: __BRANCH__  # rendered to the deploying branch by the workflow
-    dockerfile_path: docker/Dockerfile.tracking
+    image:
+      registry_type: GHCR
+      registry: ghcr.io
+      repository: __OWNER__/mlflow-tracking
+      tag: __TAG__
     instance_size_slug: apps-s-1vcpu-0.5gb
     http_port: 5000
     health_check:
@@ -16,15 +26,13 @@ services:
       initial_delay_seconds: 30
     routes:
       - path: /
-    env:
-      - key: MLFLOW_SERVER_ALLOWED_HOSTS
-        value: "*"
 
   - name: model-serve
-    github:
-      repo: Jeppe-T-K/itu-sdse-project
-      branch: __BRANCH__
-    dockerfile_path: docker/Dockerfile.model-serve
+    image:
+      registry_type: GHCR
+      registry: ghcr.io
+      repository: __OWNER__/model-serve
+      tag: __TAG__
     instance_size_slug: apps-s-1vcpu-0.5gb
     http_port: 5001
     health_check:

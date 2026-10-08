@@ -3,12 +3,19 @@ set -euo pipefail
 
 # Create or update the MLflow App Platform app from infra/digitalocean/app.yaml.
 #
-# Renders the spec with the target branch, validates it, creates the app on
-# the first run and updates + redeploys it afterwards, then waits for the
+# Renders the spec with the target image tag, validates it, creates the app
+# on the first run and updates + redeploys it afterwards, then waits for the
 # deployment to become ACTIVE (skip with --no-wait).
 #
-# Usage: scripts/deploy_do_app.sh [branch] [--no-wait]
-#   branch    branch the app builds from (default: current git branch)
+# The app deploys pre-built images from the DigitalOcean Container Registry;
+# this script does not build or push them, it only deploys what is already
+# in the registry.
+#
+# Usage: scripts/deploy_do_app.sh [tag] [--no-wait]
+#   tag    registry tag to deploy (default: latest)
+#
+# The image owner defaults to the GHCR owner (all lowercase, as GHCR
+# requires); override with the OWNER environment variable.
 #
 # Requires doctl, authenticated either via `doctl auth init` or by having
 # DIGITALOCEAN_ACCESS_TOKEN set in the environment.
@@ -16,13 +23,14 @@ set -euo pipefail
 APP_NAME="${APP_NAME:-mlops-itu-jtk}"
 SPEC="infra/digitalocean/app.yaml"
 SCRIPT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
-BRANCH="$(git -C "$SCRIPT_DIR" rev-parse --abbrev-ref HEAD)"
+TAG="latest"
+OWNER="${OWNER:-jeppe-t-k}"
 WAIT=1
 
 while [[ $# -gt 0 ]]; do
     case "$1" in
         --no-wait) WAIT=0 ;;
-        *) BRANCH="$1" ;;
+        *) TAG="$1" ;;
     esac
     shift
 done
@@ -39,9 +47,10 @@ fi
 
 spec_file="$(mktemp)"
 trap 'rm -f "$spec_file"' EXIT
-sed "s/__BRANCH__/$BRANCH/" "$SCRIPT_DIR/$SPEC" > "$spec_file"
+sed -e "s/__TAG__/$TAG/" -e "s/__OWNER__/$OWNER/" \
+    "$SCRIPT_DIR/$SPEC" > "$spec_file"
 
-echo "Validating app spec (branch: $BRANCH)..."
+echo "Validating app spec (owner: $OWNER, tag: $TAG)..."
 doctl apps spec validate "$spec_file" > /dev/null
 
 app_id="$(doctl apps list --format ID,Spec.Name --no-header \
@@ -53,7 +62,7 @@ if [[ -z "$app_id" ]]; then
 else
     echo "Updating $APP_NAME ($app_id)..."
     doctl apps update "$app_id" --spec "$spec_file" > /dev/null
-    # A spec update alone does not pick up new commits on the branch.
+    # A spec update alone does not pick up new images behind the same tag.
     doctl apps create-deployment "$app_id" > /dev/null
 fi
 echo "App ID: $app_id"
