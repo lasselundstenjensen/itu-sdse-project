@@ -42,6 +42,3 @@ services:
     # full path unchanged and the endpoint works under this prefix.
     routes:
       - path: /invocations
-    env:
-      - key: MLFLOW_TRACKING_URI
-        value: http://mlflow-tracking:5000
