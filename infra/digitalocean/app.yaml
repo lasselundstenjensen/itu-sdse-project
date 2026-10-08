@@ -30,6 +30,13 @@ services:
       timeout_seconds: 10
     routes:
       - path: /
+    envs:
+      # The MLflow 3.x job-execution/scheduler machinery wedges the server
+      # on App Platform after startup (readiness probe times out; verified
+      # the server only becomes responsive with it disabled). We don't use
+      # scheduled jobs - only tracking and artifact serving.
+      - key: MLFLOW_SERVER_ENABLE_JOB_EXECUTION
+        value: "false"
 
   - name: model-serve
     image:
