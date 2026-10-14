@@ -50,8 +50,9 @@ EXPERIMENT_NAME = "vial_image_classification"
 # Model registry name
 MODEL_NAME = "cnn_model"
 
-# Artifact path for MLflow model logging
-ARTIFACT_PATH = "model"
+# Artifact path of the registered model within a training run (the pyfunc
+# flavor; there is no separate raw PyTorch artifact)
+ARTIFACT_PATH = "model_pyfunc"
 
 # Data version for tracking
 DATA_VERSION = "00000"

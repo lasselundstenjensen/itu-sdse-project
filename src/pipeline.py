@@ -193,9 +193,6 @@ def run_model_pipeline(train_loader=None, val_loader=None, test_loader=None):
     if registry_result.get("model_details"):
         model_version = registry_result["model_details"].get("version", 1)
         
-        # Check if we have a pyfunc model version from training
-        pyfunc_model_version = models_result.get("pyfunc_model_version")
-        
         # Always deploy to Staging
         deploy_result = deploy_model(
             model_version=model_version,
@@ -205,11 +202,8 @@ def run_model_pipeline(train_loader=None, val_loader=None, test_loader=None):
 
         if deploy_result:
             set_model_alias(model_version=model_version, alias="best")
-            # Set Production alias on the pyfunc model if available, otherwise on the PyTorch model
-            alias_version = pyfunc_model_version if pyfunc_model_version else model_version
-            set_model_alias(model_version=alias_version, alias="Production")
+            set_model_alias(model_version=model_version, alias="Production")
             registry_result["model_labelled"] = True
-            registry_result["pyfunc_model_version"] = pyfunc_model_version
             
             # Get the new model's F1-score from training results
             new_model_f1 = models_result.get("test_results", {}).get("f1_score", 0)
