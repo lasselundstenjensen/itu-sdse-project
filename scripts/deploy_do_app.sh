@@ -1,15 +1,16 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Create or update the MLflow App Platform app from infra/digitalocean/app.yaml.
+# Create or update the App Platform app from infra/digitalocean/app.yaml.
 #
 # Renders the spec with the target image tag, validates it, creates the app
 # on the first run and updates + redeploys it afterwards, then waits for the
 # deployment to become ACTIVE (skip with --no-wait).
 #
-# The app deploys pre-built images from the DigitalOcean Container Registry;
-# this script does not build or push them, it only deploys what is already
-# in the registry.
+# The app runs a single service (model-serve) from a pre-built image in the
+# GitHub Container Registry; there is no MLflow tracking server in the
+# deployment. This script does not build or push images, it only deploys
+# what is already in the registry.
 #
 # Usage: scripts/deploy_do_app.sh [tag] [--no-wait]
 #   tag    registry tag to deploy (default: latest)
@@ -96,5 +97,4 @@ fi
 ingress="$(doctl apps get "$app_id" --format DefaultIngress --no-header)"
 echo ""
 echo "Deployed:"
-echo "  MLflow UI:       $ingress/"
 echo "  Inference:       $ingress/invocations"
