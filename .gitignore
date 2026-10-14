@@ -69,3 +69,5 @@ mlflow-state/
 
 # Exported model artifacts (MLflow run outputs, built by CI)
 models/model/
+
+.vibe/
