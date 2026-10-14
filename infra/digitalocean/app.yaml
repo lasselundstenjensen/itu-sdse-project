@@ -1,0 +1,47 @@
+name: mlops-itu-jtk
+region: fra1
+
+# Deploys the pre-built serving image from the GitHub Container Registry
+# (ghcr.io). The GitHub Actions workflow builds and pushes it; App Platform
+# never builds from the repository, so the model and MLflow state never enter
+# git. GHCR public packages are free; App Platform pulls them without
+# credentials, so the package must be made public once after the first push
+# (package settings -> Change visibility). Note that public means the model
+# is publicly downloadable.
+#
+# There is no deployed MLflow tracking server: best-model selection happens
+# at training time in CI (the train job runs its own MLflow server against
+# the state carried in workflow artifacts), and serving does not need one -
+# inference logging goes to a local file in the container and is discarded.
+#
+# Top-level ingress rules instead of per-service routes: routes strip the
+# matched path prefix before forwarding, so /invocations would reach the
+# scoring server as "/" and 404. preserve_path_prefix forwards the original
+# path unchanged.
+#
+# __OWNER__ and __TAG__ are rendered by the workflow (lowercased owner and
+# the deploying commit SHA; scripts/deploy_do_app.sh renders them to
+# literals for manual use).
+ingress:
+  rules:
+    - component:
+        name: model-serve
+        preserve_path_prefix: true
+      match:
+        path:
+          prefix: /invocations
+
+services:
+  - name: model-serve
+    image:
+      registry_type: GHCR
+      registry: ghcr.io
+      repository: __OWNER__/model-serve
+      tag: __TAG__
+    instance_size_slug: apps-s-1vcpu-1gb-fixed
+    http_port: 5001
+    health_check:
+      http_path: /health
+      initial_delay_seconds: 90
+      period_seconds: 10
+      timeout_seconds: 10

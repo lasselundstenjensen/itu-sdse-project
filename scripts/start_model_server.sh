@@ -1,45 +1,71 @@
 #!/bin/bash
+set -e
 
-# Start MLflow Model Server for Production model
-# Usage: ./start_model_server.sh
-# NOTE: The MLflow tracking server must be running separately (use scripts/start_mlflow_local.sh)
+# Serve the exported pyfunc model (models/model) with `mlflow models serve`.
+# The model is served straight from the local directory: no tracking server
+# is contacted while serving, and replacing the files requires a restart.
+#
+# If models/model is missing, it is exported from the latest training run on
+# the local tracking server (which must then be running - see
+# scripts/start_mlflow_local.sh - and a training run must exist).
+#
+# Usage: ./scripts/start_model_server.sh
+# Stop with: pkill -f "mlflow models serve"
 
-MODEL_NAME="cnn_model"
 PORT=5001
 LOG_FILE="./logs/model_server.log"
+MODEL_DIR="models/model"
+TRACKING_URI="http://127.0.0.1:5000"
 
-# Create logs directory if it doesn't exist
 mkdir -p ./logs
 
-# Set MLflow tracking URI - assumes tracking server is running on port 5000
-export MLFLOW_TRACKING_URI=http://127.0.0.1:5000
+if [ ! -f "$MODEL_DIR/MLmodel" ]; then
+    echo "$MODEL_DIR not found; exporting from the latest training run..."
+    if ! curl -sf "$TRACKING_URI/health" > /dev/null 2>&1; then
+        echo "ERROR: no exported model at $MODEL_DIR and no tracking server at $TRACKING_URI."
+        echo "Start one with ./scripts/start_mlflow_local.sh and train with:"
+        echo "  uv run python -m src.pipeline"
+        exit 1
+    fi
+    MLFLOW_TRACKING_URI="$TRACKING_URI" uv run python - <<'EOF'
+import mlflow
 
-echo "Starting MLflow model server for ${MODEL_NAME} on port ${PORT}..."
-echo "Logs will be written to: ${LOG_FILE}"
+runs = mlflow.search_runs(
+    experiment_names=["vial_image_classification"],
+    max_results=1,
+    order_by=["start_time DESC"],
+)
+if runs.empty:
+    raise SystemExit("No training run found on the tracking server. Train first with: uv run python -m src.pipeline")
+run_id = runs.iloc[0].run_id
+mlflow.artifacts.download_artifacts(
+    artifact_uri=f"runs:/{run_id}/model_pyfunc",
+    dst_path="models",
+)
+print(f"Exported pyfunc model from run {run_id}")
+EOF
+    rm -rf "$MODEL_DIR"
+    mv models/model_pyfunc "$MODEL_DIR"
+fi
 
-# Kill any existing model server processes on port 5001
-if lsof -i :${PORT} > /dev/null 2>&1; then
-    echo "Port ${PORT} is already in use. Killing existing model server processes..."
-    pkill -f "mlflow models serve" || true
-    lsof -ti :${PORT} | xargs kill -9 2>/dev/null || true
+# Free the port from a previous model server, if any
+if lsof -i :"$PORT" > /dev/null 2>&1; then
+    echo "Port $PORT is already in use. Stopping the existing model server..."
+    lsof -ti :"$PORT" | xargs kill -9 2>/dev/null || true
     sleep 2
 fi
 
-# Start MLflow model server in background
-# --no-conda: Use the current Python environment instead of creating a new conda environment
-# -m models:/${MODEL_NAME}@Production: Serve the model with alias 'Production'
-# -p ${PORT}: Serve on port 5001
-# > ${LOG_FILE} 2>&1: Redirect stdout and stderr to log file
-nohup mlflow models serve \
-    -m models:/${MODEL_NAME}@Production \
-    -p ${PORT} \
+echo "Starting model server on port $PORT (logs: $LOG_FILE)..."
+nohup uv run mlflow models serve \
+    -m "$MODEL_DIR" \
+    -p "$PORT" \
+    --host 0.0.0.0 \
+    --workers 1 \
     --no-conda \
-    > ${LOG_FILE} 2>&1 &
+    > "$LOG_FILE" 2>&1 &
 
-echo "Model server started in background!"
-echo "  Model: models:/${MODEL_NAME}@Production"
-echo "  Port: ${PORT}"
-echo "  Log file: ${LOG_FILE}"
-echo "  Inference endpoint: http://localhost:${PORT}/invocations"
-echo ""
-echo "To stop the server, run: pkill -f 'mlflow models serve'"
+echo "Model server starting in background."
+echo "  Model: $MODEL_DIR (local directory; restart after replacing it)"
+echo "  Inference endpoint: http://localhost:$PORT/invocations"
+echo "  Log file: $LOG_FILE"
+echo "To stop: pkill -f 'mlflow models serve'"

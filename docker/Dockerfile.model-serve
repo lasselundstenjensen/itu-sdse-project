@@ -1,13 +1,28 @@
 FROM python:3.13-slim
 WORKDIR /app
-COPY pyproject.toml .
-RUN pip install --no-cache-dir -e .
+
+# CPU-only torch keeps the image small; inference does not use CUDA
+RUN pip install --no-cache-dir torch torchvision \
+    --index-url https://download.pytorch.org/whl/cpu
+
+# Install the project package so the pickled pyfunc model
+# (src.deployment.logging_wrapper) is importable in the serving process
+COPY pyproject.toml README.md ./
 COPY src/ ./src/
-COPY artifacts/ ./artifacts/
+RUN pip install --no-cache-dir .
+
+# pyfunc model committed by the CI train job
+COPY models/model /app/models/model
+
+# App Platform component-to-component address of the tracking service
 ENV MLFLOW_TRACKING_URI=http://mlflow-tracking:5000
 EXPOSE 5001
+
+# One worker: importing torch is slow and memory-heavy, and several
+# workers make the readiness probe time out on the 512 MiB instance.
 CMD ["mlflow", "models", "serve", \
-    "-m", "models:/cnn_model@Production", \
+    "-m", "/app/models/model", \
     "-p", "5001", \
+    "--workers", "1", \
     "--host", "0.0.0.0", \
     "--no-conda"]

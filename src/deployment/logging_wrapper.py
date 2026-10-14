@@ -8,7 +8,6 @@ This is a simplified version that separates logging from drift detection.
 import base64
 import json
 import os
-import time
 from datetime import datetime, timezone
 from io import BytesIO
 from pathlib import Path
@@ -28,7 +27,6 @@ from ..config import (
     TRANSFORM_MEAN,
     TRANSFORM_STD,
     INFERENCE_LOG_PATH,
-    MLFLOW_TRACKING_URI,
 )
 
 
@@ -54,7 +52,6 @@ class SimpleLoggingWrapper(mlflow.pyfunc.PythonModel):
         model_path: Optional[Path] = None,
         log_path: Path = INFERENCE_LOG_PATH,
         threshold: float = THRESHOLD,
-        mlflow_run_id: Optional[str] = None,
     ):
         """
         Initialize the logging wrapper.
@@ -69,16 +66,11 @@ class SimpleLoggingWrapper(mlflow.pyfunc.PythonModel):
             Path to the JSON log file.
         threshold : float, default=THRESHOLD from config
             Classification threshold.
-        mlflow_run_id : str, optional
-            MLflow run ID to log metrics to. If provided, inference metrics
-            (latency, predictions, confidence) will be logged to this run.
         """
         self.model = model
         self.model_path = model_path
         self.log_path = log_path
         self.threshold = threshold
-        self.mlflow_run_id = mlflow_run_id
-        self.metrics_step = 0
         
         # Transform for preprocessing images
         self.transform = transforms.Compose([
@@ -202,27 +194,6 @@ class SimpleLoggingWrapper(mlflow.pyfunc.PythonModel):
         except Exception as e:
             print(f"Warning: Failed to log request: {e}")
     
-    def _log_to_mlflow(self, metrics: Dict[str, float]) -> None:
-        """
-        Log metrics to MLflow tracking for the model's run.
-        
-        Parameters
-        ----------
-        metrics : Dict[str, float]
-            Dictionary of metrics to log (e.g., latency, prediction counts).
-        """
-        if not self.mlflow_run_id:
-            return
-        
-        try:
-            mlflow.set_tracking_uri(MLFLOW_TRACKING_URI)
-            with mlflow.start_run(run_id=self.mlflow_run_id):
-                for key, value in metrics.items():
-                    mlflow.log_metric(key, value, step=self.metrics_step)
-            self.metrics_step += 1
-        except Exception as e:
-            print(f"Warning: Failed to log metrics to MLflow: {e}")
-    
     def preprocess_image(self, image_input: Union[str, Path, bytes]) -> torch.Tensor:
         """
         Preprocess a single image for inference.
@@ -309,8 +280,6 @@ class SimpleLoggingWrapper(mlflow.pyfunc.PythonModel):
             - timestamp: ISO timestamp of the request
             - num_samples: Number of images processed
         """
-        start_time = time.time()
-        
         if self.model is None:
             self.load_context(context)
         
@@ -412,26 +381,6 @@ class SimpleLoggingWrapper(mlflow.pyfunc.PythonModel):
                 log_entries.append(error_log)
                 self._log_request(error_log)
         
-        # Log metrics to MLflow
-        if self.mlflow_run_id and predictions:
-            latency = time.time() - start_time
-            # Filter out None values for valid predictions
-            valid_predictions = [p for p in predictions if p is not None]
-            valid_confidences = [c for c in confidences if c is not None]
-            
-            metrics = {
-                "inference_latency_ms": latency * 1000,
-                "predictions_total": len(valid_predictions),
-                "predictions_class_0": valid_predictions.count(0),
-                "predictions_class_1": valid_predictions.count(1),
-            }
-            
-            # Add average confidence if we have valid confidences
-            if valid_confidences:
-                metrics["avg_confidence"] = sum(valid_confidences) / len(valid_confidences)
-            
-            self._log_to_mlflow(metrics)
-        
         # Return predictions with raw outputs
         return {
             'predictions': predictions,
@@ -457,12 +406,6 @@ if __name__ == "__main__":
         print("SimpleLoggingWrapper created successfully!")
         print(f"Log path: {wrapper.log_path}")
         print(f"Device: {wrapper.device}")
-        print(f"MLflow run ID: {wrapper.mlflow_run_id}")
-        
-        # Test with mlflow_run_id
-        wrapper_with_run = SimpleLoggingWrapper(mlflow_run_id="test_run_123")
-        print(f"\nWrapper with run_id created:")
-        print(f"MLflow run ID: {wrapper_with_run.mlflow_run_id}")
         
     except Exception as e:
         print(f"Error: {e}")

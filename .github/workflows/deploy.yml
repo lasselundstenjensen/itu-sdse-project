@@ -1,0 +1,119 @@
+name: Deploy to App Platform
+
+# Deploys pre-built images from GHCR to the DigitalOcean App Platform app.
+# Training and image building happen in train.yml; this workflow never
+# trains, so deploy methods can be iterated on without retraining.
+#
+# Deploys pre-built images from GHCR to the DigitalOcean App Platform app.
+# Training and image building happen in train.yml, which can dispatch this
+# workflow after a successful run with the tag it just pushed (opt-in via
+# its "deploy" input); this workflow can also be started manually on any
+# branch. Nothing runs on push, and it never trains, so deploy methods can
+# be iterated on without retraining.
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: GHCR image tag to deploy (empty = latest)
+        required: false
+        default: latest
+
+permissions:
+  contents: read
+
+concurrency:
+  group: mlflow-deploy
+  cancel-in-progress: false
+
+env:
+  APP_NAME: mlops-itu-jtk
+  SPEC_PATH: infra/digitalocean/app.yaml
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      # Check out the branch the workflow was dispatched on, so the app
+      # spec used matches the deploy method being iterated on there.
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.ref_name }}
+
+      - name: Install doctl
+        uses: digitalocean/action-doctl@v2
+        with:
+          token: ${{ secrets.DIGITALOCEAN_ACCESS_TOKEN }}
+
+      - name: Render and validate app spec
+        run: |
+          TAG="${{ inputs.tag }}"
+          : "${TAG:=latest}"
+          echo "Deploying tag: $TAG"
+          OWNER="${GITHUB_REPOSITORY_OWNER,,}"
+          sed -e "s/__TAG__/$TAG/" -e "s/__OWNER__/$OWNER/" \
+              "$SPEC_PATH" > "$RUNNER_TEMP/app.yaml"
+          doctl apps spec validate "$RUNNER_TEMP/app.yaml" > /dev/null
+
+      - name: Create or update the app
+        id: app
+        run: |
+          app_id="$(doctl apps list --format ID,Spec.Name --no-header \
+            | awk -v name="$APP_NAME" '$2 == name { print $1 }')"
+          if [ -z "$app_id" ]; then
+            echo "Creating $APP_NAME (the first deployment starts with it)"
+            app_id="$(doctl apps create --spec "$RUNNER_TEMP/app.yaml" --format ID --no-header)"
+          else
+            echo "Updating $APP_NAME ($app_id)"
+            doctl apps update "$app_id" --spec "$RUNNER_TEMP/app.yaml" --format ID --no-header > /dev/null
+            # A spec update alone does not deploy the new image tag.
+            doctl apps create-deployment "$app_id" --format ID --no-header > /dev/null
+          fi
+          echo "id=$app_id" >> "$GITHUB_OUTPUT"
+
+      - name: Remove the rendered spec
+        if: always()
+        run: rm -f "$RUNNER_TEMP/app.yaml"
+
+      - name: Wait for deployment
+        env:
+          APP_ID: ${{ steps.app.outputs.id }}
+        run: |
+          # Phases: PENDING_BUILD, BUILDING, PENDING_DEPLOY, DEPLOYING, then
+          # ACTIVE, or ERROR / CANCELED / SUPERSEDED.
+          phase=""
+          for _ in $(seq 1 100); do
+            phase="$(doctl apps list-deployments "$APP_ID" --format Phase --no-header | head -n 1)"
+            echo "deployment phase: $phase"
+            case "$phase" in
+              ACTIVE) break ;;
+              ERROR|CANCELED|SUPERSEDED)
+                echo "::error::deployment ended in $phase"
+                doctl apps logs "$APP_ID" --type build --tail 100 || true
+                doctl apps logs "$APP_ID" --type deploy --tail 100 || true
+                exit 1 ;;
+            esac
+            sleep 15
+          done
+          if [ "$phase" != "ACTIVE" ]; then
+            echo "::error::deployment did not finish within 25 minutes"
+            exit 1
+          fi
+
+      - name: Smoke test
+        env:
+          APP_ID: ${{ steps.app.outputs.id }}
+        run: |
+          url="$(doctl apps get "$APP_ID" --format DefaultIngress --no-header)"
+          echo "Inference endpoint: $url/invocations"
+          code="$(curl -s -o /dev/null -w '%{http_code}' \
+              -X POST "$url/invocations" \
+              -H 'Content-Type: application/json' -d '{}')"
+          if [ "$code" -ge 500 ] || [ "$code" -eq 404 ]; then
+            echo "::error::inference endpoint not reachable (HTTP $code)"
+            exit 1
+          fi
+          echo "Endpoint reachable (HTTP $code; 4xx is expected for an empty payload)"
+          echo "### Deployed: $url" >> "$GITHUB_STEP_SUMMARY"
+          echo "::notice title=Live at::$url"
