@@ -277,7 +277,6 @@ class SimpleLoggingWrapper(mlflow.pyfunc.PythonModel):
             - predictions: List of class predictions (0 or 1)
             - confidences: List of raw probability scores
             - raw_outputs: List of raw model outputs
-            - timestamp: ISO timestamp of the request
             - num_samples: Number of images processed
         """
         if self.model is None:
@@ -386,7 +385,6 @@ class SimpleLoggingWrapper(mlflow.pyfunc.PythonModel):
             'predictions': predictions,
             'confidences': confidences,
             'raw_outputs': raw_outputs,
-            'timestamp': timestamp,
             'num_samples': len(image_inputs),
         }
 
