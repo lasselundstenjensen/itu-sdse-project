@@ -344,8 +344,8 @@ class SimpleLoggingWrapper(mlflow.pyfunc.PythonModel):
                     pred = 1 if prob >= self.threshold else 0
                 
                 predictions.append(int(pred))
-                confidences.append(float(prob))
-                raw_outputs.append(float(prob))
+                confidences.append(round(float(prob), 4))
+                raw_outputs.append(round(float(prob), 4))
                 
                 # Create log entry for this request
                 # For bytes input, use a placeholder for the image identifier
