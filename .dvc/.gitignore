@@ -1,2 +1,9 @@
 /config.local
 /tmp
+data/images/raw/
+data/test/*.jpg
+artifacts/
+mlflow-state/
+models/
+.venv/
+__pycache__/
