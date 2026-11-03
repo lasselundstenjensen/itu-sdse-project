@@ -6,3 +6,16 @@ ruff
 tqdm
 typer
 -e .
+
+# vials legacy
+torch
+torchvision
+mlflow>=2.18
+boto3
+dvc
+numpy
+pandas
+scikit-learn
+scipy
+pillow
+requests
