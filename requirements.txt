@@ -19,3 +19,7 @@ scikit-learn
 scipy
 pillow
 requests
+
+# Running the notebooks headlessly
+nbconvert
+ipykernel
