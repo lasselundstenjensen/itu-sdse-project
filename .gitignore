@@ -1,0 +1,14 @@
+
+# local data
+/data/
+
+
+#future mlflow stuff
+/artifacts/
+/models/
+/mlflow-state/
+
+# env variables
+.env
+.env.*
+
