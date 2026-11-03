@@ -1,0 +1,12 @@
+md5: a4cea8283a862db3d8f6f437a007b448
+frozen: true
+deps:
+- checksum: '"7f0dfa39634f31e6b0832d5af1a719fb"'
+  size: 1892
+  hash: md5
+  path: https://itudsip.hel1.your-objectstorage.com/data/test/metadata.csv
+outs:
+- md5: 7f0dfa39634f31e6b0832d5af1a719fb
+  size: 1892
+  hash: md5
+  path: metadata.csv
