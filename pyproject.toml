@@ -16,16 +16,42 @@ classifiers = [
     
 ]
 dependencies = [
+    "boto3",
+    "dvc",
+    "fastapi",
     "loguru",
+    "mlflow>=2.18",
+    "numpy",
+    "pandas",
+    "pillow",
     "pip",
-    "pytest",
     "python-dotenv",
-    "ruff",
+    "requests",
+    "scikit-learn",
+    "scipy",
+    "torch",
+    "torchvision",
     "tqdm",
     "typer",
+    "uvicorn",
 ]
 requires-python = "~=3.13.0"
 
+[dependency-groups]
+dev = ["pytest", "httpx", "ruff"]
+
+[tool.uv.sources]
+torch = { index = "pytorch-cpu" }
+torchvision = { index = "pytorch-cpu" }
+
+[[tool.uv.index]]
+name = "pytorch-cpu"
+url = "https://download.pytorch.org/whl/cpu"
+explicit = true
+
+[tool.pytest.ini_options]
+addopts = "-m 'not model'"
+markers = ["model: tests that need a trained model artifact"]
 
 [tool.ruff]
 line-length = 99
