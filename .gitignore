@@ -1,0 +1,23 @@
+# Byte-compiled doc
+__pycache__/
+*.py[cod]
+*$py.class
+
+#virtual env
+.venv/
+venv/
+env/
+
+# Jupyter Notebook kontrol noktaları
+.ipynb_checkpoints/
+
+data/
+models/
+*.pt
+*.pth
+*.pkl
+*.h5
+*.onnx
+
+#key
+.env
