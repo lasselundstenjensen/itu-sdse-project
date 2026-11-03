@@ -258,9 +258,12 @@ def create_dataloaders(train_dataset, val_dataset, test_dataset,
     val_data = GlassVialDataset(list(val_paths), list(val_labels), val_transforms)
     test_data = GlassVialDataset(list(test_paths), list(test_labels), val_transforms)
 
-    train_loader = DataLoader(train_data, batch_size=batch_size, shuffle=True, num_workers=0, pin_memory=True)
-    val_loader = DataLoader(val_data, batch_size=batch_size, shuffle=False, num_workers=0, pin_memory=True)
-    test_loader = DataLoader(test_data, batch_size=batch_size, shuffle=False, num_workers=0, pin_memory=True)
+    # GPU Optimization, so only use when one is available
+    pin_memory = torch.cuda.is_available()
+
+    train_loader = DataLoader(train_data, batch_size=batch_size, shuffle=True, pin_memory=pin_memory)
+    val_loader = DataLoader(val_data, batch_size=batch_size, shuffle=False, pin_memory=pin_memory)
+    test_loader = DataLoader(test_data, batch_size=batch_size, shuffle=False, pin_memory=pin_memory)
 
     print(f"  Train: {len(train_loader)} batches")
     print(f"  Val: {len(val_loader)} batches")
@@ -289,6 +292,7 @@ def main():
     ARTIFACTS_DIR.mkdir(parents=True, exist_ok=True)
     dump_class_names()
 
+    # COULD BE REMOVED AFTER TA ANSWER, BASICALLY DEAD-CODE
     train_dataset, val_dataset, test_dataset = split_dataset(dataset)
     save_splits(train_dataset, val_dataset, test_dataset)
 
