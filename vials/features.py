@@ -1,14 +1,9 @@
-from pathlib import Path
-
-from loguru import logger
-import typer
 import numpy as np
 import yaml
 from torchvision import transforms
 
 from vials.config import TRAINING_CONFIG_PATH
 
-app = typer.Typer()
 
 def calculate_image_statistics(data_loader):
     """Calculate mean and standard deviation per channel for a dataset."""
@@ -76,12 +71,3 @@ def get_transforms():
         image_specs["transform_mean"],
         image_specs["transform_std"],
     )
-
-
-@app.command()
-def main():
-    pass
-
-
-if __name__ == "__main__":
-    app()
