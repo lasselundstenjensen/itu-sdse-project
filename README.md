@@ -1,5 +1,53 @@
 # ITU BDS MLOPS'26 - Project (V2)
 
+
+itu-mlops-final-project/
+├── README.md                  # project description, structure, how to run
+├── pyproject.toml             # Python package + dependencies (replaces notebooks/requirements.txt)
+├── .python-version            # 3.13 
+├── .gitignore                 # data, artifacts, mlflow-state, models, __pycache__
+├── Makefile                   # shortcuts: make test, make train, make lint
+│
+├── .github/
+│   └── workflows/
+│       ├── ci.yml             # on PRs: lint + pytest
+│       ├── train.yml          # runs Dagger train, uploads model artifact
+│       └── deploy.yml         # runs Dagger build/push, then deploy
+│
+├── dagger/                    # the Dagger module, written in Go
+│   ├── go.mod
+│   ├── main.go                # Train(), Test(), BuildImage(), Deploy() functions
+│   └── dagger.json
+│
+├── src/vial_classifier/       # the Python package (the refactored notebook code)
+│   ├── __init__.py
+│   ├── config.py
+│   ├── data.py
+│   ├── features.py
+│   ├── train.py
+│   ├── evaluate.py
+│   ├── drift.py
+│   ├── model.py
+│   ├── registry.py
+│   └── serve.py
+│
+├── tests/
+│   ├── test_data.py
+│   ├── test_features.py
+│   ├── test_drift.py
+│   └── test_serve.py          # /health and /invocations
+│
+├── docker
+│   └── Dockerfile.model-serve # the serving image missing
+│
+├── infra/
+│   └── digitalocean/app.yaml  # already there
+│
+├── data/                      # DVC pointers only (.dvc files), no raw data in Git
+├── .dvc/, .dvcignore
+├── notebooks/                 # original notebooks, kept for reference
+└── docs/                      # architecture diagram, dataset doc 
+
 ## Task
 
 Based on the input provided (see below), fork the repository and restructure the code to adhere to the concepts and ideas you have seen throughout the course. The diagram below provides a detailed overview of the structure that the solution is expected to follow.
