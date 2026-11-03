@@ -1,5 +1,9 @@
-# Data
-/data/
+# Data - ignore the contents but keep DVC tracking files and folder placeholders
+/data/**
+!/data/**/
+!/data/**/.gitignore
+!/data/**/.gitkeep
+!/data/**/*.dvc
 
 # Mac OS-specific storage files
 .DS_Store

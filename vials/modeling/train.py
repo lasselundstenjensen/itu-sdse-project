@@ -3,27 +3,36 @@ from pathlib import Path
 from loguru import logger
 from tqdm import tqdm
 import typer
+import mlflow
 
-from vials.config import MODELS_DIR, PROCESSED_DATA_DIR
+from vials.config import MODELS_DIR, PROCESSED_DATA_DIR, ARTIFACTS_DIR, MLFLOW_STATE_DIR, MLFLOW_TRACKING_URI, EXPERIMENT_NAME, MLFLOW_ARTIFACT_LOCATION
+
 
 app = typer.Typer()
 
 
+def setup_mlflow_tracking(experiment_name=None):
+    """Point MLflow at the local state dir and create the experiment if needed."""
+    MLFLOW_STATE_DIR.mkdir(parents=True, exist_ok=True)
+    mlflow.set_tracking_uri(MLFLOW_TRACKING_URI)
+
+    if experiment_name is None:
+        return
+
+    experiment = mlflow.get_experiment_by_name(experiment_name)
+    if experiment is None:
+        mlflow.create_experiment(experiment_name, artifact_location=MLFLOW_ARTIFACT_LOCATION)
+    mlflow.set_experiment(experiment_name)
+
+
 @app.command()
-def main(
-    # ---- REPLACE DEFAULT PATHS AS APPROPRIATE ----
-    features_path: Path = PROCESSED_DATA_DIR / "features.csv",
-    labels_path: Path = PROCESSED_DATA_DIR / "labels.csv",
-    model_path: Path = MODELS_DIR / "model.pkl",
-    # -----------------------------------------
-):
-    # ---- REPLACE THIS WITH YOUR OWN CODE ----
-    logger.info("Training some model...")
-    for i in tqdm(range(10), total=10):
-        if i == 5:
-            logger.info("Something happened for iteration 5.")
-    logger.success("Modeling training complete.")
-    # -----------------------------------------
+def main():
+    ARTIFACTS_DIR.mkdir(parents=True, exist_ok=True)
+    MODELS_DIR.mkdir(parents=True, exist_ok=True)
+
+    setup_mlflow_tracking(EXPERIMENT_NAME)
+    logger.info("MLflow tracking URI: {}", mlflow.get_tracking_uri())
+    
 
 
 if __name__ == "__main__":
