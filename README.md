@@ -1,80 +1,77 @@
-# ITU BDS MLOPS'26 - Project (V2)
+# Vial impurity classification - MLOps pipeline
 
-## Task
+ITU BDS MLOps 2026 exam project. A small CNN classifies images of pharmaceutical
+vials as **clean (0)** or **defective (1)**; the model is trained, validated and
+deployed to DigitalOcean App Platform by a Dagger (Go) pipeline orchestrated from
+GitHub Actions.
 
-Based on the input provided (see below), fork the repository and restructure the code to adhere to the concepts and ideas you have seen throughout the course. The diagram below provides a detailed overview of the structure that the solution is expected to follow.
+- Assignment: [docs/TASK.md](docs/TASK.md)
+- Dataset: [docs/pharmaceutical-vial-dataset.md](docs/pharmaceutical-vial-dataset.md)
+- Original monolithic notebooks (reference only): [notebooks/](notebooks/)
 
-![Project architecture](./docs/project-architecture.png)
+> Work in progress - sections marked TODO are filled in as the pipeline lands.
 
-For the exam submission, we expect you to submit a pdf containing:
-- the list of members of the group
-- the link to the github.com public repository hosting your solution
-  - following the above, there is *no need* to invite the teaching staff as collaborators
+## Project organization
 
-The repository linked in the submission should contain:
+Based on the [Cookiecutter Data Science](https://cookiecutter-data-science.drivendata.org/) template.
 
-- A README.md file that describes the project
-- GitHub automation workflow
-- Dagger workflow (in Go)
-- All history
+```
+├── Makefile               <- Convenience commands (`make data`, `make train`, `make test`, ...)
+├── README.md
+├── pyproject.toml         <- Package metadata, dependencies, ruff/pytest config
+├── uv.lock                <- Locked dependency versions (uv)
+├── data
+│   ├── external           <- Data from third-party sources
+│   ├── interim            <- Intermediate transformed data
+│   ├── processed          <- Final data sets for modeling
+│   └── raw
+│       ├── images         <- 730 training images; metadata.csv is DVC-tracked
+│       └── test           <- 10 held-out test images; metadata.csv is DVC-tracked
+├── docs                   <- Assignment, dataset documentation, diagrams
+├── infra/digitalocean     <- App Platform spec for the serving container
+├── models                 <- Exported MLflow pyfunc model (models/model), not in git
+├── notebooks              <- Original training/deployment notebooks (reference)
+├── references             <- Data dictionaries, manuals, explanatory material
+├── reports/figures        <- Generated figures
+├── tests                  <- pytest test suite
+└── vial_classifier        <- Source code
+    ├── config.py          <- Paths, data source, hyperparameters, serving settings
+    ├── dataset.py         <- Download images, Dataset class, stratified split, loaders
+    ├── features.py        <- Image transforms and dataset statistics
+    ├── modeling
+    │   ├── model.py           <- SimpleCNN architecture
+    │   ├── train.py           <- Training entry point (MLflow logging + registration)
+    │   ├── evaluate.py        <- Test-set evaluation
+    │   ├── drift_baseline.py  <- Baseline statistics for drift detection
+    │   ├── wrapper.py         <- MLflow pyfunc serving wrapper (inference logging)
+    │   ├── registry.py        <- Model selection, promotion and export to models/model
+    │   └── predict.py         <- Batch inference with the exported model
+    ├── plots.py           <- Report figures (training curves, confusion matrix)
+    ├── monitoring
+    │   └── drift.py       <- KS-test drift detection over the inference log
+    └── serving
+        └── app.py         <- FastAPI app: /health, /invocations, /infer, /version, /drift
+```
 
-## Inputs
+## Getting started
 
-You are given the following material:
-- Python monoliths (see `notebooks` folder)
-- Raw input data (pulled from the object store by the training notebook)
-- Group login to https://sdse-event-engine-r5ih8.ondigitalocean.app/ for monitoring deployed model
-- DigitalOcean App Platform spec for the deployment (see `infra/digitalocean/app.yaml`)
+Requires [uv](https://docs.astral.sh/uv/) and Python 3.13.
 
-## Outputs
+```bash
+uv sync                # create .venv and install all dependencies (incl. dev tools)
+make data              # dvc pull the metadata, then download the images
+make train             # train the CNN, log to mlflow-state/
+make export            # promote the best model and export it to models/model
+make test              # run the test suite
+make lint              # ruff format check + lint
+```
 
-- Your GitHub repository (including all history)
-  - A README.md file that describes the project
-  - GitHub automation workflow
-  - Dagger workflow (in Go)
-- Model artifacts produced by GitHub workflow
-- Hosted endpoint in DigitalOcean
-  - /health that returns {"status": "ok"}
-  - /invocations that take binary image payload
-  - /drift that returns model/data drift information
+On Linux (CI, Dagger, Docker) torch is installed from the CPU-only PyTorch index.
 
-> **NOTE:**
-> The Dagger workflow can be run locally or inside the GitHub workflow—both are viable options during development.
->
-> The Dagger workflow can run locally and can also be made to produce outputs locally during development. But when wrapping the Dagger workflow in a GitHub workflow, the output is instead stored inside the GitHub runner (i.e. a virtual machine).
->
-> Use the publicly available [`actions/upload-artifact`](https://github.com/actions/upload-artifact) to store the model artifact in the GitHub worklow pipeline.
->
-> This model artifact can then be picked up by the [action provided](https://github.com/lasselundstenjensen/itu-sdse-project-model-validator), which will run some inference tests to ensure that the correct model was trained.
+## Pipeline
 
-## How will we assess
+TODO: Dagger functions, GitHub workflows, model artifact and validation.
 
-Below, we provide information on how we will assess the submission clustered around several aspects. The groups are expected to be of size 4, and you're expected to use pull requests and tests.
+## Deployment and monitoring
 
-### Versioning
-
-- Use of Git (semantic commit messages, branches, branch longevity, commit frequency/size)
-- Management of data and artifacts
-- Use of pull requests
-
-### Programming
-
-- Decomposition of Python notebook
-- Adherance to standard data science MLOps project structure
-- Presence of tests
-
-### Workflow automation
-
-- Presence of a workflow that trains the model
-- Presence of a workflow that tests the model
-- Structure of Dagger workflow
-- Orchestration of Dagger workflow through GitHub workflow
-
-### Documentation (README.md)
-
-- Description of project structure
-- How to run the code and generate the model artifact
-
-## Questions
-
-If you have any questions about the information shared here, please feel free to post them on Learnit. Answers to private emails on this topic will also be shared on Learnit, along with the original email content, so that everyone has access to the same information.
+TODO: Docker image, GHCR, DigitalOcean App Platform, endpoints, drift-triggered retraining.
