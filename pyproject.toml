@@ -1,0 +1,17 @@
+[project]
+name = "itu-sdse-project-bkkzrt"
+version = "0.1.0"
+requires-python = ">=3.13"
+dependencies = [
+    "boto3>=1.43.123",
+    "dvc>=3.67.1",
+    "mlflow>=2.18",
+    "numpy>=2.5.4",
+    "pandas>=3.1.0",
+    "pillow>=13.0.0",
+    "requests>=2.34.2",
+    "scikit-learn>=1.9.1",
+    "scipy>=1.18.1",
+    "torch>=2.15.0",
+    "torchvision>=0.29.2",
+]
