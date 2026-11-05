@@ -1,22 +1,66 @@
+[build-system]
+requires = ["flit_core >=3.2,<4"]
+build-backend = "flit_core.buildapi"
+
 [project]
 name = "itu-sdse-project-bkkzrt"
 version = "0.1.0"
-requires-python = ">=3.13"
+description = "Pharmaceutical vial impurity classification - MLOps pipeline (ITU BDS MLOps 2026)"
+readme = "README.md"
+requires-python = "~=3.13.0"
 dependencies = [
     "boto3>=1.43.123",
     "dvc>=3.67.1",
+    "loguru",
     "mlflow>=2.18",
     "numpy>=2.5.4",
     "pandas>=3.1.0",
     "pillow>=13.0.0",
+    "python-dotenv",
     "requests>=2.34.2",
     "scikit-learn>=1.9.1",
     "scipy>=1.18.1",
     "torch>=2.15.0",
     "torchvision>=0.29.2",
+    "tqdm",
+    "typer",
 ]
 
 [dependency-groups]
 dev = [
+    "cookiecutter-data-science>=2.3.0",
+    "httpx",
     "ipykernel>=7.4.0",
+    "pytest",
+    "ruff",
 ]
+
+# The distribution is named after the repo, the import package is vial_classifier
+[tool.flit.module]
+name = "vial_classifier"
+
+# On Linux (CI, Dagger containers, Docker image) install the CPU-only torch
+# wheels - the default PyPI wheels pull several GB of CUDA libraries.
+[tool.uv.sources]
+torch = [{ index = "pytorch-cpu", marker = "sys_platform == 'linux'" }]
+torchvision = [{ index = "pytorch-cpu", marker = "sys_platform == 'linux'" }]
+
+[[tool.uv.index]]
+name = "pytorch-cpu"
+url = "https://download.pytorch.org/whl/cpu"
+explicit = true
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
+[tool.ruff]
+line-length = 99
+src = ["vial_classifier", "tests"]
+include = ["pyproject.toml", "vial_classifier/**/*.py", "tests/**/*.py"]
+
+[tool.ruff.lint]
+extend-select = ["I"]  # import sorting
+
+[tool.ruff.lint.isort]
+known-first-party = ["vial_classifier"]
+force-sort-within-sections = true
