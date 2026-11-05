@@ -53,13 +53,13 @@ Cell numbers are 0-based positions in the notebook, markdown cells included.
 - [X] 0.2 Run `01_training.ipynb` from start to finish with the new `data/raw/images/{train,test}` paths
 - [X] 0.3 Write down the reference numbers below. Every later parity check compares against them.
 
-| Metric                                     | Notebook result        |
-| ------------------------------------------ | ---------------------- |
-| Train / val / test split sizes             | 510 / 108 / 112        |
-| Epochs run (early stopping?)               | 2 (early stop)         |
-| Best val macro F1                          | 0.4433                 |
-| Optimal threshold                          | 0.025                  |
-| Test accuracy / F1 / ROC-AUC               | 0.7857 / 0.88 / 0.8537 |
+| Metric                                         | Notebook result        |
+| ---------------------------------------------- | ---------------------- |
+| Train / val / test split sizes                 | 510 / 108 / 112        |
+| Epochs run (early stopping?)                   | 3 (early stop)         |
+| Best val macro F1                              | 0.4433                 |
+| Optimal threshold                              | 0.025                  |
+| Test accuracy / F1 / ROC-AUC                   | 0.7857 / 0.88 / 0.8537 |
 | Prediction for `Clean_151_…` (true label 0) | 1 (raw output 0.5144)  |
 | Prediction for `Glass_039_…` (true label 1) | 1 (raw output 0.5152)  |
 
@@ -90,14 +90,14 @@ threshold of 0.5, not the tuned 0.025. Parity means matching these values, even 
 
 ## Phase 2: Model, training, evaluation (`feat/training-core`)
 
-- [ ] 2.1 `modeling/model.py`: `SimpleCNN` + `get_device()`
-- [ ] 2.2 `modeling/train.py`: `setup_mlflow_tracking(experiment_name)`
-- [ ] 2.3 `modeling/train.py`: `train_cnn_model(...)`, with hyperparameters as arguments (defaults from config)
+- [X] 2.1 `modeling/model.py`: `SimpleCNN` + `get_device()`
+- [X] 2.2 `modeling/train.py`: `setup_mlflow_tracking(experiment_name)`
+- [X] 2.3 `modeling/train.py`: `train_cnn_model(...)`, with hyperparameters as arguments (defaults from config)
   - keep `torch.manual_seed` / `np.random.seed` at the start (image stats consume random numbers before training)
   - keep the MLflow logging guarded by `mlflow.active_run()`
-- [ ] 2.4 `modeling/train.py`: `tune_threshold(model, val_loader, ...)`
-- [ ] 2.5 `modeling/evaluate.py`: `evaluate_cnn_model(model, test_loader, threshold)`
-- [ ] 2.6 Tests (`tests/test_model.py`, `tests/test_train.py`):
+- [X] 2.4 `modeling/train.py`: `tune_threshold(model, val_loader, ...)`
+- [X] 2.5 `modeling/evaluate.py`: `evaluate_cnn_model(model, test_loader, threshold)`
+- [X] 2.6 Tests (`tests/test_model.py`, `tests/test_train.py`):
   - forward pass: `(2,3,64,64)` → `(2,1)`
   - 2 epochs on ~8 fake images return a history and restore the best weights
   - `tune_threshold` picks the expected threshold on a hand-made case
