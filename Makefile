@@ -65,7 +65,6 @@ create_environment:
 ## Pull DVC-tracked metadata and download the images
 .PHONY: data
 data: requirements
-	uv run dvc pull
 	uv run python -m vial_classifier.dataset
 
 ## Train the model (logs to the local MLflow store in mlflow-state/)
