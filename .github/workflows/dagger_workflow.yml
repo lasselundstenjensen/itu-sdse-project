@@ -1,0 +1,73 @@
+name: Validate serving model
+
+# The v2 replacement for the v1 "Run Dagger Pipeline" placeholder that
+# previously lived at this path as an empty file and failed every push.
+# In v2 the serving model is not a sklearn model.pkl pushed with the
+# code: it is the MLflow pyfunc export that train.yml uploads as the
+# `model` artifact (7-day retention, manual dispatch only). So on push
+# we fetch that artifact from the most recent successful train.yml run
+# on this branch and run this repository's own validation method
+# (scripts/validate_model.py) through the model-validator action.
+on:
+  push:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: read  # find and download the train.yml run's model artifact
+
+concurrency:
+  group: model-validation
+  cancel-in-progress: true
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
+      # The pyfunc wrapper imports src.* at load time, so the repo must
+      # be installed in the job that runs the validation command.
+      - name: Install dependencies
+        run: |
+          pip install torch torchvision --index-url https://download.pytorch.org/whl/cpu
+          pip install -e .
+      # Cross-run artifact fetch: the model artifact belongs to a
+      # previous train.yml run, not this one, so download-artifact
+      # cannot see it. If no training run exists yet (or the artifact
+      # expired) there is nothing to validate, so the push passes with
+      # a notice instead of failing.
+      - name: Fetch the exported model from the last training run
+        id: fetch-model
+        env:
+          GH_TOKEN: ${{ github.token }}
+          BRANCH: ${{ github.ref_name }}
+        run: |
+          run_id="$(gh run list --branch "$BRANCH" --status success \
+              --limit 30 --json databaseId,workflowName \
+              --jq '.[] | select(.workflowName == "Train and push images") | .databaseId' \
+              | head -n 1)"
+          if [ -z "$run_id" ]; then
+            echo "::notice::no successful training run on $BRANCH - no model to validate yet"
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          echo "Fetching model artifact from run $run_id"
+          if ! gh run download "$run_id" --name model --dir models/model; then
+            echo "::error::training run $run_id exists but its model artifact could not be downloaded (expired?)"
+            exit 1
+          fi
+          echo "skip=false" >> "$GITHUB_OUTPUT"
+      # The action only provides the plumbing (Python + a shell for the
+      # command); the validation method itself lives in this repository.
+      - name: Run model validation
+        if: steps.fetch-model.outputs.skip != 'true'
+        uses: lasselundstenjensen/itu-sdse-project-model-validator@main
+        with:
+          model_path: models/model
+          validate_command: python scripts/validate_model.py --model-dir models/model --fixtures-dir validation/fixtures

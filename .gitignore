@@ -1,0 +1,6 @@
+#data
+data/test/*.csv
+data/images/*.csv
+
+#packages
+.venv

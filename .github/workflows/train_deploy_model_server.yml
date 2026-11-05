@@ -1,0 +1,167 @@
+name: Train and deploy model server
+
+on:
+  push:
+    branches: [main, v2-deploy-test]
+
+permissions:
+  contents: write  # the train job commits the exported model and MLflow state
+
+# Serialize deployments: the train job builds on the state committed by
+# the previous run and pushes a new one.
+concurrency:
+  group: mlflow-deploy
+  cancel-in-progress: false
+
+env:
+  APP_NAME: mlops-itu-jtk
+  SPEC_PATH: infra/digitalocean/app.yaml
+
+jobs:
+  train:
+    runs-on: ubuntu-latest
+    steps:
+      # Includes models/model and mlflow-state/ committed by the previous
+      # train run: the restored registry makes the new model compete
+      # against the previous Production model and keeps the run history.
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
+      - name: Install dependencies
+        run: |
+          pip install torch torchvision --index-url https://download.pytorch.org/whl/cpu
+          pip install -e .
+      # Local tracking server on the runner, mirroring the deployed layout.
+      # --serve-artifacts stores artifact URIs as location-independent
+      # mlflow-artifacts:/ paths, keeping the database portable.
+      - name: Start local MLflow tracking server
+        run: |
+          mkdir -p mlflow-state/artifacts
+          mlflow server \
+              --backend-store-uri sqlite:///$PWD/mlflow-state/mlflow.db \
+              --artifacts-destination file:///$PWD/mlflow-state/artifacts \
+              --serve-artifacts \
+              --host 127.0.0.1 \
+              --port 5000 &
+          for _ in $(seq 1 60); do
+              curl -sf http://127.0.0.1:5000/health && break
+              sleep 1
+          done
+      - name: Run training pipeline
+        env:
+          MLFLOW_TRACKING_URI: http://127.0.0.1:5000
+        run: python -m src.pipeline
+
+      # Export the pyfunc model (SimpleLoggingWrapper) from the training
+      # run. This is the flavor that serves /invocations with image input
+      # and logs inference for drift detection - not the raw PyTorch flavor.
+      - name: Export pyfunc model
+        env:
+          MLFLOW_TRACKING_URI: http://127.0.0.1:5000
+        run: |
+          python - <<'EOF'
+          import mlflow
+          runs = mlflow.search_runs(
+              experiment_names=["vial_image_classification"],
+              max_results=1,
+              order_by=["start_time DESC"],
+          )
+          if runs.empty:
+              raise RuntimeError("No MLflow run found after training")
+          run_id = runs.iloc[0].run_id
+          mlflow.artifacts.download_artifacts(
+              artifact_uri=f"runs:/{run_id}/model_pyfunc",
+              dst_path="models",
+          )
+          print(f"Exported pyfunc model from run {run_id}")
+          EOF
+          rm -rf models/model
+          mv models/model_pyfunc models/model
+      # App Platform builds the images from the repository, so the model
+      # and the MLflow state must be in the repo. Pushing with the
+      # GITHUB_TOKEN does not re-trigger this workflow.
+      - name: Commit model and MLflow state
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -f models/model mlflow-state
+          git commit -m "Deploy: model and MLflow state from training run [skip ci]"
+          git push
+  deploy:
+    needs: train
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      # The train job pushed a new commit; check out the branch head
+      # instead of the triggering commit.
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.ref_name }}
+
+      - name: Install doctl
+        uses: digitalocean/action-doctl@v2
+        with:
+          token: ${{ secrets.DIGITALOCEAN_ACCESS_TOKEN }}
+
+      - name: Render and validate app spec
+        run: |
+          sed "s/__BRANCH__/${{ github.ref_name }}/" "$SPEC_PATH" > "$RUNNER_TEMP/app.yaml"
+          doctl apps spec validate "$RUNNER_TEMP/app.yaml" > /dev/null
+      - name: Create or update the app
+        id: app
+        run: |
+          app_id="$(doctl apps list --format ID,Spec.Name --no-header \
+            | awk -v name="$APP_NAME" '$2 == name { print $1 }')"
+          if [ -z "$app_id" ]; then
+            echo "Creating $APP_NAME (the first deployment starts with it)"
+            app_id="$(doctl apps create --spec "$RUNNER_TEMP/app.yaml" --format ID --no-header)"
+          else
+            echo "Updating $APP_NAME ($app_id)"
+            doctl apps update "$app_id" --spec "$RUNNER_TEMP/app.yaml" --format ID --no-header > /dev/null
+            # A spec update alone does not pick up new commits on the branch.
+            doctl apps create-deployment "$app_id" --format ID --no-header > /dev/null
+          fi
+          echo "id=$app_id" >> "$GITHUB_OUTPUT"
+      - name: Wait for deployment
+        env:
+          APP_ID: ${{ steps.app.outputs.id }}
+        run: |
+          # Phases: PENDING_BUILD, BUILDING, PENDING_DEPLOY, DEPLOYING, then
+          # ACTIVE, or ERROR / CANCELED / SUPERSEDED.
+          phase=""
+          for _ in $(seq 1 100); do
+            phase="$(doctl apps list-deployments "$APP_ID" --format Phase --no-header | head -n 1)"
+            echo "deployment phase: $phase"
+            case "$phase" in
+              ACTIVE) break ;;
+              ERROR|CANCELED|SUPERSEDED)
+                echo "::error::deployment ended in $phase"
+                doctl apps logs "$APP_ID" --type build --tail 100 || true
+                doctl apps logs "$APP_ID" --type deploy --tail 100 || true
+                exit 1 ;;
+            esac
+            sleep 15
+          done
+          if [ "$phase" != ACTIVE ]; then
+            echo "::error::deployment did not finish within 25 minutes"
+            exit 1
+          fi
+      - name: Smoke test
+        env:
+          APP_ID: ${{ steps.app.outputs.id }}
+        run: |
+          url="$(doctl apps get "$APP_ID" --format DefaultIngress --no-header)"
+          echo "Inference endpoint: $url/invocations"
+          code="$(curl -s -o /dev/null -w '%{http_code}' \
+              -X POST "$url/invocations" \
+              -H 'Content-Type: application/json' -d '{}')"
+          if [ "$code" -ge 500 ] || [ "$code" -eq 404 ]; then
+            echo "::error::inference endpoint not reachable (HTTP $code)"
+            exit 1
+          fi
+          echo "Endpoint reachable (HTTP $code; 4xx is expected for an empty payload)"
+          echo "### Deployed: $url" >> "$GITHUB_STEP_SUMMARY"
+          echo "::notice title=Live at::$url"
