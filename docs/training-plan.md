@@ -103,7 +103,12 @@ threshold of 0.5, not the tuned 0.025. Parity means matching these values, even 
   - `tune_threshold` picks the expected threshold on a hand-made case
   - `evaluate_cnn_model` returns all the metric keys
 
-## Phase 3: Artifacts and pyfunc wrapper (`feat/training-artifacts`)
+## Phases 3–6: one branch
+
+Do Phases 3–6 on a single branch, `feat/training-pipeline`, with one commit per phase. Start it from `main`
+once `refactor/data-layout`, `feat/data-pipeline` and `feat/training-core` are merged, because Phase 4 needs all of them.
+
+## Phase 3: Artifacts and pyfunc wrapper
 
 - [ ] 3.1 `modeling/drift_baseline.py`: `compute_baseline_statistics(...)` + `log_baseline_metrics(stats)`
 - [ ] 3.2 `modeling/wrapper.py`: `SimpleLoggingWrapper`
@@ -117,7 +122,7 @@ threshold of 0.5, not the tuned 0.025. Parity means matching these values, even 
   - each request is appended to the log file
   - baseline JSON has all the keys the `/drift` endpoint reads
 
-## Phase 4: Pipeline entry point and registration (`feat/training-pipeline`)
+## Phase 4: Pipeline entry point and registration
 
 - [ ] 4.1 `modeling/registry.py`: `wait_until_ready(...)`, `register_model(run_id) -> version` (Staging, tags, `best` alias)
 - [ ] 4.2 `modeling/train.py`: `main()`, the full run in notebook order:
@@ -129,7 +134,7 @@ threshold of 0.5, not the tuned 0.025. Parity means matching these values, even 
 - [ ] 4.6 **Parity check**: `make train` against the Phase 0 table. Investigate any difference before moving on.
 - [ ] 4.7 Delete the `NotImplementedError` stubs that are now implemented
 
-## Phase 5: Training container (`feat/training-container`)
+## Phase 5: Training container
 
 - [ ] 5.1 `docker/Dockerfile.train`:
   - `python:3.13-slim` + uv
@@ -144,7 +149,7 @@ threshold of 0.5, not the tuned 0.025. Parity means matching these values, even 
 - [ ] 5.6 `make train-docker` target
 - [ ] 5.7 Hand-off note for Person D (Dagger): image build context, command, args, env vars, output directories
 
-## Phase 6: Docs and clean-up (`docs/training`)
+## Phase 6: Docs and clean-up
 
 - [ ] 6.1 README: "Training" section (local + container), artifacts produced, MLflow state
 - [ ] 6.2 Keep the notebook as reference only; make sure nothing imports from it
