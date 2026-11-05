@@ -1,0 +1,4 @@
+* text=auto eol=lf
+
+# DVC cache objects are addressed by their md5: git must never rewrite them
+.dvc/cache/** -text

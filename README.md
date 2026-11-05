@@ -25,8 +25,9 @@ Based on the [Cookiecutter Data Science](https://cookiecutter-data-science.drive
 │   ├── interim            <- Intermediate transformed data
 │   ├── processed          <- Final data sets for modeling
 │   └── raw
-│       ├── images         <- 730 training images; metadata.csv is DVC-tracked
-│       └── test           <- 10 held-out test images; metadata.csv is DVC-tracked
+│       └── images
+│           ├── train      <- 730 training images; metadata.csv is DVC-tracked
+│           └── test       <- 10 held-out test images; metadata.csv is DVC-tracked
 ├── docs                   <- Assignment, dataset documentation, diagrams
 ├── infra/digitalocean     <- App Platform spec for the serving container
 ├── models                 <- Exported MLflow pyfunc model (models/model), not in git

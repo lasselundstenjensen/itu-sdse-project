@@ -21,11 +21,13 @@ INTERIM_DATA_DIR = DATA_DIR / "interim"
 PROCESSED_DATA_DIR = DATA_DIR / "processed"
 EXTERNAL_DATA_DIR = DATA_DIR / "external"
 
-# Training images + metadata (metadata.csv is DVC-tracked, images are downloaded)
+# Raw images: metadata.csv files are DVC-tracked, the JPEGs are downloaded next to them
 RAW_IMAGES_DIR = RAW_DATA_DIR / "images"
-METADATA_PATH = RAW_IMAGES_DIR / "metadata.csv"
-# Held-out test set (10 images, 2 per class)
-TEST_DATA_DIR = RAW_DATA_DIR / "test"
+# Training set (730 images, split 70/15/15 into train/val/test at training time)
+TRAIN_DATA_DIR = RAW_IMAGES_DIR / "train"
+TRAIN_METADATA_PATH = TRAIN_DATA_DIR / "metadata.csv"
+# Held-out test set (10 images, 2 per class), never used for training
+TEST_DATA_DIR = RAW_IMAGES_DIR / "test"
 TEST_METADATA_PATH = TEST_DATA_DIR / "metadata.csv"
 
 MODELS_DIR = PROJ_ROOT / "models"
@@ -46,7 +48,7 @@ FIGURES_DIR = REPORTS_DIR / "figures"
 # --- Data source (public Hetzner object store) ---------------------------------
 S3_ENDPOINT = "https://itudsip.hel1.your-objectstorage.com"
 S3_BUCKET = "data"
-S3_IMAGES_PREFIX = "images/raw/"
+S3_TRAIN_PREFIX = "images/raw/"
 S3_TEST_PREFIX = "test/"
 
 # --- Training -----------------------------------------------------------------
