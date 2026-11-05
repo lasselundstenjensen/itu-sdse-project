@@ -7,7 +7,7 @@ def test_paths_are_inside_project():
 
 
 def test_dvc_pointers_exist_for_metadata():
-    assert config.METADATA_PATH.with_suffix(".csv.dvc").exists()
+    assert config.TRAIN_METADATA_PATH.with_suffix(".csv.dvc").exists()
     assert config.TEST_METADATA_PATH.with_suffix(".csv.dvc").exists()
 
 

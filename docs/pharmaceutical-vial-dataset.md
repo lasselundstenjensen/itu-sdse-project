@@ -73,15 +73,14 @@ data/
 
 ### **Organized Dataset Structure (Processed)**
 ```bash
-data/
-├── images/
-│   ├── raw/
-│   │   ├── Clean_001.jpg
-│   │   ├── Clean_002.jpg
-│   │   ├── ...
-│   │   ├── Glass_001.jpg
-│   │   ├── Glass_002.jpg
-│   │   └── ... (one image per vial)
+data/raw/images/
+├── train/                    <- training set (split 70/15/15 at training time)
+│   ├── Clean_001.jpg
+│   ├── Clean_002.jpg
+│   ├── ...
+│   ├── Glass_001.jpg
+│   ├── Glass_002.jpg
+│   ├── ... (one image per vial)
 │   └── metadata.csv
 └── test/                     <- held-out test set (see below)
     ├── Clean_151_TLC00-20240326150919-041901.jpg
@@ -90,7 +89,7 @@ data/
 ```
 
 ### **Held-Out Test Set**
-A small held-out test set lives at `data/test/`: **10 images, 2 per class** (clean, glass, plastic, rubber, sand), with `batch_id=TEST_SET` in its metadata. It is separate from the training images and is used to check predictions against the deployed model without touching the training data. Its metadata uses the same schema as the training metadata, but filenames include the full camera file name (e.g. `Clean_151_TLC00-20240326150919-041901.jpg`).
+A small held-out test set lives at `data/raw/images/test/`: **10 images, 2 per class** (clean, glass, plastic, rubber, sand), with `batch_id=TEST_SET` in its metadata. It is separate from the training images and is used to check predictions against the deployed model without touching the training data. Its metadata uses the same schema as the training metadata, but filenames include the full camera file name (e.g. `Clean_151_TLC00-20240326150919-041901.jpg`).
 
 ---
 
@@ -252,12 +251,12 @@ The dataset was organized in a one-off step, which:
 5. Validates all images and metadata
 
 ### **Output**
-- Organized images in `data/images/raw/`
-- Metadata file at `data/images/metadata.csv`
+- Organized images in `data/raw/images/train/`
+- Metadata file at `data/raw/images/train/metadata.csv`
 - Dataset statistics printed to console
 
 ### **Where the data lives now**
-Both the organized set and the held-out test set are hosted in the course object store (`data` bucket at `itudsip.hel1.your-objectstorage.com`, keys `images/raw/`, `images/metadata.csv`, `test/`, `test/metadata.csv`). The training notebook downloads them from there; the raw 19-image tree is not distributed with the repository. The two metadata CSVs are versioned with DVC (`data/images/metadata.csv.dvc`, `data/test/metadata.csv.dvc`), so `dvc pull` fetches them from the object store, while the JPEG images themselves are downloaded by the notebook from the URLs listed in the metadata.
+Both the organized set and the held-out test set are hosted in the course object store (`data` bucket at `itudsip.hel1.your-objectstorage.com`, keys `images/raw/`, `images/metadata.csv`, `test/`, `test/metadata.csv`). The training notebook downloads them from there; the raw 19-image tree is not distributed with the repository. The two metadata CSVs are versioned with DVC (`data/raw/images/train/metadata.csv.dvc`, `data/raw/images/test/metadata.csv.dvc`), so `dvc pull` fetches them from the object store, while the JPEG images themselves are downloaded by the notebook from the URLs listed in the metadata.
 
 ---
 
@@ -270,13 +269,13 @@ Both the organized set and the held-out test set are hosted in the course object
 - **Total Size**: ~4.5 GB (estimated)
 
 ### **Processed Dataset Files**
-- **Location**: object store `images/raw/` (downloaded by the training notebook to `data/images/raw/`)
+- **Location**: object store `images/raw/` (downloaded by the training notebook to `data/raw/images/train/`)
 - **Total Images**: 730 JPEG files
 - **Metadata**: object store `images/metadata.csv`
 - **Total Size**: ~730 MB (estimated)
 
 ### **Held-Out Test Set Files**
-- **Location**: object store `test/` (downloaded to `data/test/`)
+- **Location**: object store `test/` (downloaded to `data/raw/images/test/`)
 - **Total Images**: 10 JPEG files
 - **Metadata**: object store `test/metadata.csv`
 
@@ -343,7 +342,7 @@ Clean_151_TLC00-20240326150919-041901.jpg,0,clean,Clean_151,none,data/Clean/Clea
 Glass_039_TLC00-20240327111626-061101.jpg,1,defective,Glass_039,glass,data/Glass/Glass_039/TLC00-20240327111626-061101.jpg,19,1600,768,JPEG,TEST_SET,2026-07-29T19:11:01.415854
 ```
 
-The last two rows are from the held-out test set (`data/test/metadata.csv`); the rest are from the training metadata (`data/images/metadata.csv`).
+The last two rows are from the held-out test set (`data/raw/images/test/metadata.csv`); the rest are from the training metadata (`data/raw/images/train/metadata.csv`).
 
 ---
 

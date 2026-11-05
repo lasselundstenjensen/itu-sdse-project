@@ -4,7 +4,7 @@ Loads the exported MLflow pyfunc model (config.EXPORT_DIR) and predicts on a
 directory of images, using the same base64 contract as POST /invocations.
 Used locally and by scripts/validate_model.py (CI model validation).
 
-CLI: `python -m vial_classifier.modeling.predict --images-dir data/raw/test`
+CLI: `python -m vial_classifier.modeling.predict --images-dir data/raw/images/test`
 """
 
 from pathlib import Path
