@@ -1,7 +1,9 @@
 import os
+
 import mlflow
 
 from vial_classifier import config
+
 
 def setup_mlflow_tracking(experiment_name=None):
     """Point MLflow at the local state dir and create the experiment if needed."""
@@ -13,7 +15,9 @@ def setup_mlflow_tracking(experiment_name=None):
 
     experiment = mlflow.get_experiment_by_name(experiment_name)
     if experiment is None:
-        mlflow.create_experiment(experiment_name, artifact_location=config.mlflow_artifact_location)
+        mlflow.create_experiment(
+            experiment_name, artifact_location=config.mlflow_artifact_location
+        )
     mlflow.set_experiment(experiment_name)
 
     setup_mlflow_tracking(experiment_name)
