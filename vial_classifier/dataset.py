@@ -1,15 +1,15 @@
 """Fetch the vial dataset from the object store and load it as (image_path, label) pairs."""
 
+from concurrent.futures import ThreadPoolExecutor, as_completed
 import csv
+from pathlib import Path
 import subprocess
 import sys
-from concurrent.futures import ThreadPoolExecutor, as_completed
-from pathlib import Path
 
 import boto3
-import pandas as pd
 from botocore import UNSIGNED
 from botocore.config import Config
+import pandas as pd
 
 from vial_classifier import config
 
