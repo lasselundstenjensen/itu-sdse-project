@@ -68,6 +68,8 @@ DRIFT_BASELINE_STATS_PATH = ARTIFACT_DIR + "/drift_baseline_stats.json"
 CLASS_NAMES_PATH = ARTIFACT_DIR + "/class_names.json"
 IMAGE_STATISTICS_PATH = ARTIFACT_DIR + "/image_statistics.json"
 INFERENCE_LOG_PATH = ARTIFACT_DIR + "/inference_log.json"
+EXPORT_DIR = MODELS_DIR / "model"       
+MODEL_ARTIFACT_PATH = "model_pyfunc"     
 DRIFT_DEFAULT_DAYS = 7
 DRIFT_KS_PVALUE_THRESHOLD = 0.05
 
