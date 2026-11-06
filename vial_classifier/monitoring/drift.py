@@ -8,7 +8,7 @@ from scipy.stats import ks_2samp
 from vial_classifier import config
 
 
-def load_inference_logs(log_path=config.inference_log_path):
+def load_inference_logs(log_path=config.INFERENCE_LOG_PATH):
     """Load the inference log JSON file (may not exist yet)."""
     if not Path(log_path).exists():
         print(f"Warning: Inference log not found at {log_path}")
@@ -24,7 +24,7 @@ def load_inference_logs(log_path=config.inference_log_path):
         return []
 
 
-def filter_logs_by_time(logs, days=config.drift_default_days):
+def filter_logs_by_time(logs, days=config.DRIFT_DEFAULT_DAYS):
     """Only keep log entries from the last N days."""
     if not logs:
         return []
@@ -44,11 +44,11 @@ def filter_logs_by_time(logs, days=config.drift_default_days):
 
 def load_baseline_stats():
     """Load the baseline statistics written during training."""
-    if not Path(config.drift_baseline_stats_path).exists():
-        print(f"Warning: Baseline stats not found at {config.drift_baseline_stats_path}")
+    if not Path(config.DRIFT_BASELINE_STATS_PATH).exists():
+        print(f"Warning: Baseline stats not found at {config.DRIFT_BASELINE_STATS_PATH}")
         return None
     try:
-        with open(config.drift_baseline_stats_path, "r") as f:
+        with open(config.DRIFT_BASELINE_STATS_PATH, "r") as f:
             return json.load(f)
     except (OSError, ValueError) as e:
         print(f"Warning: Failed to load baseline stats: {e}")
@@ -72,7 +72,7 @@ def check_confidence_drift(current_confidences, baseline_stats):
             "ks_statistic": 0.0,
             "ks_pvalue": 1.0,
             "drift_detected": False,
-            "threshold_ks": config.drift_ks_pvalue_threshold,
+            "threshold_ks": config.DRIFT_KS_PVALUE_THRESHOLD,
         }
 
     baseline = baseline_stats["confidence_statistics"]
@@ -83,7 +83,7 @@ def check_confidence_drift(current_confidences, baseline_stats):
             "ks_statistic": 0.0,
             "ks_pvalue": 1.0,
             "drift_detected": False,
-            "threshold_ks": config.drift_ks_pvalue_threshold,
+            "threshold_ks": config.DRIFT_KS_PVALUE_THRESHOLD,
         }
 
     baseline_mean = baseline["mean"]
@@ -96,7 +96,7 @@ def check_confidence_drift(current_confidences, baseline_stats):
     ks_statistic, ks_pvalue = ks_2samp(baseline_samples, current_confidences_array)
 
     mean_diff = abs(current_mean - baseline_mean)
-    ks_drift = ks_pvalue < config.drift_ks_pvalue_threshold
+    ks_drift = ks_pvalue < config.DRIFT_KS_PVALUE_THRESHOLD
     mean_drift = mean_diff > 0.1
     drift_detected = bool(ks_drift or mean_drift)
 
@@ -107,7 +107,7 @@ def check_confidence_drift(current_confidences, baseline_stats):
         "current_mean": current_mean,
         "baseline_mean": baseline_mean,
         "drift_detected": drift_detected,
-        "threshold_ks": config.drift_ks_pvalue_threshold,
+        "threshold_ks": config.DRIFT_KS_PVALUE_THRESHOLD,
         "threshold_mean": 0.1,
     }
 
@@ -119,7 +119,7 @@ def check_class_distribution_drift(predictions, baseline_stats):
             "ks_statistic": 0.0,
             "ks_pvalue": 1.0,
             "drift_detected": False,
-            "threshold_ks": config.drift_ks_pvalue_threshold,
+            "threshold_ks": config.DRIFT_KS_PVALUE_THRESHOLD,
         }
 
     baseline = baseline_stats["class_distribution"]
@@ -131,7 +131,7 @@ def check_class_distribution_drift(predictions, baseline_stats):
             "ks_statistic": 0.0,
             "ks_pvalue": 1.0,
             "drift_detected": False,
-            "threshold_ks": config.drift_ks_pvalue_threshold,
+            "threshold_ks": config.DRIFT_KS_PVALUE_THRESHOLD,
         }
 
     baseline_prop_0 = baseline["class_0_count"] / baseline_total
@@ -141,18 +141,18 @@ def check_class_distribution_drift(predictions, baseline_stats):
     baseline_samples = np.random.choice([0, 1], size=baseline_total, p=baseline_dist)
     ks_statistic, ks_pvalue = ks_2samp(baseline_samples, predictions)
 
-    ks_drift = ks_pvalue < config.drift_ks_pvalue_threshold
+    ks_drift = ks_pvalue < config.DRIFT_KS_PVALUE_THRESHOLD
     drift_detected = bool(ks_drift)
 
     return {
         "ks_statistic": float(ks_statistic),
         "ks_pvalue": float(ks_pvalue),
         "drift_detected": drift_detected,
-        "threshold_ks": config.drift_ks_pvalue_threshold,
+        "threshold_ks": config.DRIFT_KS_PVALUE_THRESHOLD,
     }
 
 
-def detect_drift(logs, days=config.drift_default_days, baseline_stats=None):
+def detect_drift(logs, days=config.DRIFT_DEFAULT_DAYS, baseline_stats=None):
     """Main drift detection: confidences + class distribution."""
     filtered_logs = filter_logs_by_time(logs, days=days)
 
