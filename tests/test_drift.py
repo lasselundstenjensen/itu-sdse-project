@@ -1,4 +1,4 @@
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
 import numpy as np
 
@@ -11,7 +11,7 @@ BASELINE = {
 
 
 def make_log(confidence, prediction, days_ago=0):
-    ts = datetime.now(timezone.utc) - timedelta(days=days_ago)
+    ts = datetime.now(UTC) - timedelta(days=days_ago)
     return {"timestamp": ts.isoformat(), "prediction": prediction, "confidence": confidence}
 
 
