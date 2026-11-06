@@ -1,9 +1,8 @@
 import mlflow
 import numpy as np
-import torch
-import torch.nn as nn
-import torch.optim as optim
 from sklearn.metrics import accuracy_score, f1_score
+import torch
+from torch import nn, optim
 
 from vial_classifier.config import (
     EARLY_STOP_PATIENCE,
@@ -15,6 +14,7 @@ from vial_classifier.config import (
 )
 from vial_classifier.modeling.model import SimpleCNN
 from vial_classifier.utils import get_device
+
 
 def train_cnn_model(train_loader, val_loader, num_epochs=NUM_EPOCHS, learning_rate=LEARNING_RATE, device=None, random_seed=RANDOM_STATE):
     """Train the SimpleCNN model on glass vial images."""
@@ -171,7 +171,7 @@ def train_cnn_model(train_loader, val_loader, num_epochs=NUM_EPOCHS, learning_ra
         model.load_state_dict(history['best_model_state'])
         print(f"\nRestored best model weights (best val macro F1: {history['best_val_f1_macro']:.4f})")
 
-    print(f"\nTraining complete!")
+    print("\nTraining complete!")
     print(f"Best validation macro F1-score: {history['best_val_f1_macro']:.4f}")
 
     return model, history
