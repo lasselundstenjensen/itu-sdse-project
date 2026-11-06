@@ -51,12 +51,17 @@ NUM_CLASSES = 2
 TRANSFORM_MEAN = [0.485, 0.456, 0.406]
 TRANSFORM_STD = [0.229, 0.224, 0.225]
 
+# Object store (notebook 01, code cell 5)
+S3_ENDPOINT = "https://itudsip.hel1.your-objectstorage.com"
+S3_BUCKET = "data"
+
 # Paths (relative to the project root)
 ARTIFACT_DIR = "artifacts"
 MLFLOW_STATE_DIR = "mlflow-state"
-IMAGE_DATA_DIR = "./data/images/raw"
-METADATA_PATH = "./data/images/metadata.csv"
-TEST_DATA_DIR = "./data/test"
+IMAGE_DATA_DIR = DATA_DIR / "images" / "raw"
+METADATA_PATH = DATA_DIR / "images" / "metadata.csv"
+TEST_DATA_DIR = DATA_DIR / "test"
+TEST_METADATA_PATH = TEST_DATA_DIR / "metadata.csv"
 PYTORCH_MODEL_PATH = ARTIFACT_DIR + "/vial_cnn_model.pth"
 MODEL_RESULTS_PATH = ARTIFACT_DIR + "/model_results.json"
 DRIFT_BASELINE_STATS_PATH = ARTIFACT_DIR + "/drift_baseline_stats.json"
