@@ -4,3 +4,7 @@ data/images/*.csv
 
 #packages
 .venv
+
+#model weights and notebook output
+/artifacts/
+*.pth
