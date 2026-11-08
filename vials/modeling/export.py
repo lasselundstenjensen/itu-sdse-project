@@ -7,6 +7,7 @@ import time
 
 from loguru import logger
 import mlflow
+from mlflow import MlflowClient
 from mlflow.exceptions import MlflowException
 import typer
 
@@ -16,6 +17,7 @@ from vials.config import (
     MLFLOW_ARTIFACT_LOCATION,
     MLFLOW_STATE_DIR,
     MLFLOW_TRACKING_URI,
+    MODEL_NAME,
     MODEL_PATH,
 )
 
@@ -210,7 +212,23 @@ def write_version_info(client, model_name, export_dir=MODEL_PATH, fallback_versi
 
 @app.command()
 def main():
-    pass
+    """Select the best model, promote it if it beats production, and export it."""
+    setup_mlflow_tracking(EXPERIMENT_NAME)
+    client = MlflowClient()
+
+    best_run = get_best_run(EXPERIMENT_NAME)
+    _, _, prod_run_id = get_production_model(client, MODEL_NAME)
+    run_id = select_run_to_promote(best_run, prod_run_id)
+
+    version = None
+    if run_id is not None:
+        version = promote_model(client, MODEL_NAME, run_id)
+
+    model_uri, description = resolve_model_uri(client, MODEL_NAME, EXPERIMENT_NAME)
+    logger.info("Exporting: {}", description)
+    logger.info("  Source: {}", model_uri)
+    export_model(model_uri)
+    write_version_info(client, MODEL_NAME, fallback_version=version)
 
 
 if __name__ == "__main__":
