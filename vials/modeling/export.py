@@ -70,6 +70,31 @@ def get_production_model(client, model_name):
     return None, None, None
 
 
+def select_run_to_promote(best_run, prod_run_id):
+    """Return the run id to promote, or None if production should stay."""
+    train_model_score = best_run.get("metrics.test_f1_score")
+    if train_model_score is None:
+        train_model_score = best_run.get("metrics.f1_score")
+
+    if prod_run_id is None:
+        logger.info("No model in production. The trained model will be promoted.")
+        return best_run["run_id"]
+
+    prod_metrics = mlflow.get_run(prod_run_id).data.metrics
+    prod_model_score = prod_metrics.get("test_f1_score") or prod_metrics.get("f1_score")
+
+    logger.info("Comparing models:")
+    logger.info("  Current best (training): {}", train_model_score)
+    logger.info("  Production: {}", prod_model_score)
+
+    if train_model_score > prod_model_score:
+        logger.info("New model is better. Promoting the new model.")
+        return best_run["run_id"]
+
+    logger.info("Current production model is better. Keeping it.")
+    return None
+
+
 @app.command()
 def main():
     pass
