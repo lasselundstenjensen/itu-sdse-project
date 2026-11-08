@@ -1,9 +1,12 @@
+import time
+
 from loguru import logger
 import mlflow
 from mlflow.exceptions import MlflowException
 import typer
 
 from vials.config import (
+    ARTIFACT_PATH,
     EXPERIMENT_NAME,
     MLFLOW_ARTIFACT_LOCATION,
     MLFLOW_STATE_DIR,
@@ -93,6 +96,50 @@ def select_run_to_promote(best_run, prod_run_id):
 
     logger.info("Current production model is better. Keeping it.")
     return None
+
+
+def wait_for_deployment(client, model_name, version, stage="Staging", max_attempts=20):
+    """Wait until the model version has reached the given stage."""
+    for _ in range(max_attempts):
+        current_stage = client.get_model_version(name=model_name, version=version).current_stage
+        if current_stage == stage:
+            logger.info("Transition completed to {}", stage)
+            return True
+        logger.info("Waiting for transition to {} (current: {})", stage, current_stage)
+        time.sleep(2)
+    return False
+
+
+def promote_model(client, model_name, run_id):
+    """Register the run's model if needed and move it to Production."""
+    versions = [
+        mv for mv in client.search_model_versions(f"name='{model_name}'") if mv.run_id == run_id
+    ]
+    if not versions:
+        logger.info("Run was not registered yet, registering it now")
+        model_details = mlflow.register_model(f"runs:/{run_id}/{ARTIFACT_PATH}", name=model_name)
+        version = model_details.version
+    else:
+        version = versions[0].version
+
+    logger.info("Promoting {} version {}", model_name, version)
+
+    # Always via Staging
+    current_stage = client.get_model_version(name=model_name, version=version).current_stage
+    if current_stage != "Staging":
+        client.transition_model_version_stage(
+            name=model_name, version=version, stage="Staging", archive_existing_versions=True
+        )
+        wait_for_deployment(client, model_name, version, "Staging")
+
+    client.transition_model_version_stage(
+        name=model_name, version=version, stage="Production", archive_existing_versions=True
+    )
+    wait_for_deployment(client, model_name, version, "Production")
+    client.set_registered_model_alias(name=model_name, alias="Production", version=str(version))
+    client.set_model_version_tag(model_name, version, "deployed_to", "production")
+    logger.info("{} version {} is now in Production", model_name, version)
+    return version
 
 
 @app.command()
