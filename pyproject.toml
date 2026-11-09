@@ -1,0 +1,39 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "vial-classifier"
+version = "0.1.0"
+description = "Glass-vial image classification: training, MLflow promotion and HTTP serving"
+readme = "README.md"
+requires-python = ">=3.13,<3.14"
+dependencies = [
+    "torch",
+    "torchvision",
+    "mlflow>=2.18",
+    "boto3",
+    "dvc",
+    "numpy",
+    "pandas",
+    "scikit-learn",
+    "scipy",
+    "pillow",
+    "requests",
+    "fastapi",
+    "uvicorn",
+]
+
+[project.optional-dependencies]
+dev = ["pytest", "httpx"]
+
+[project.scripts]
+vial-classifier = "vial_classifier.__main__:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]
+addopts = "-ra"
