@@ -1,0 +1,18 @@
+# Python environment
+.venv/
+__pycache__/
+*.pyc
+.ipynb_checkpoints/
+
+# Data (downloaded from the object store, never in git)
+data/images/raw/
+data/test/*.jpg
+
+# Training outputs
+artifacts/
+mlflow-state/
+models/
+
+# Secrets and OS files
+.env
+.DS_Store
