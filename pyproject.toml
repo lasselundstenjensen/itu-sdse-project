@@ -1,0 +1,41 @@
+[build-system]
+requires = ["flit_core >=3.2,<4"]
+build-backend = "flit_core.buildapi"
+
+[project]
+name = "vial_classifier"
+version = "0.1.0"
+description = "MLOps pipeline for classifying pharmaceutical vial images"
+authors = [{ name = "Emil, Radost, Stella, Joakim" }]
+license = { file = "LICENSE" }
+readme = "README.md"
+requires-python = ">=3.13,<3.14"
+dependencies = [
+    "torch",
+    "torchvision",
+    "mlflow>=2.18",
+    "boto3",
+    "dvc",
+    "numpy",
+    "pandas",
+    "scikit-learn",
+    "scipy",
+    "pillow",
+    "requests",
+    "fastapi",
+    "uvicorn",
+    "loguru",
+    "typer",
+    "tqdm",
+    "python-dotenv",
+]
+
+[project.optional-dependencies]
+dev = ["pytest", "ruff", "httpx", "ipykernel"]
+
+[tool.ruff]
+line-length = 99
+src = ["vial_classifier"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
