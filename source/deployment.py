@@ -36,6 +36,43 @@ os.makedirs("mlflow-state", exist_ok=True)
 
 warnings.filterwarnings('ignore')
 
+"""
+MODEL CONFIGURATION
+(module level, because function defaults below - e.g. drift_default_days -
+are evaluated when the functions are defined)
+"""
+
+model_name = "cnn_model"
+experiment_name = "vial_image_classification"
+artifact_path = "model_pyfunc"
+
+model_version = 1  # fallback, the real version is looked up from the registry below
+
+artifact_dir = "artifacts"
+mlflow_state_dir = "mlflow-state"
+drift_baseline_stats_path = artifact_dir + "/drift_baseline_stats.json"
+inference_log_path = artifact_dir + "/inference_log.json"
+model_results_path = artifact_dir + "/model_results.json"
+drift_default_days = 7
+drift_ks_pvalue_threshold = 0.05
+
+# Where the exported servable model goes (this is what gets baked into the Docker image)
+export_dir = "models/model"
+model_path = export_dir
+
+# Serving ports
+port = 5001
+upstream_port = 5002
+upstream_host = "127.0.0.1"
+
+# Where the endpoint lives in production
+PROD_ENDPOINT = "https://mlops-itu-jtk.ondigitalocean.app"
+
+mlflow_tracking_uri = f"sqlite:///{mlflow_state_dir}/mlflow.db"
+mlflow_artifact_location = "./mlflow-state/artifacts"
+
+scoring_proc = None  # set in __main__ once the scoring server is started
+
 """ 
 This function will start the tracking of the expirement
 """
@@ -140,7 +177,7 @@ def _start_scoring_server():
         "-p", str(upstream_port),
         "--workers", "1",
         "--host", upstream_host,
-        "--no-conda",
+        "--env-manager", "local",
     ], env=env)
     atexit.register(lambda: proc.poll() is None and proc.terminate())
     return proc
@@ -356,7 +393,7 @@ def health():
 """
 
 """
-def version():
+def version_endpoint():
     """Model version of the served model (watched by the monitoring platform)."""
     version_file = Path(model_path) / "version.json"
     if version_file.exists():
@@ -406,43 +443,7 @@ def drift(days: int = Query(default=drift_default_days, ge=1)):
 
 if __name__ == "__main__":
 
-    """
-    MODEL CONFIGURATION
-    """
-
-    # dbutils.widgets.text("Model version", "1")
-    # model_version = dbutils.widgets.get("Model version")
-
-    model_name = "cnn_model"
-    experiment_name = "vial_image_classification"
-    artifact_path = "model_pyfunc"
-
-    model_version = 1  # fallback, the real version is looked up from the registry below
-
-    artifact_dir = "artifacts"
-    mlflow_state_dir = "mlflow-state"
-    drift_baseline_stats_path = artifact_dir + "/drift_baseline_stats.json"
-    inference_log_path = artifact_dir + "/inference_log.json"
-    model_results_path = artifact_dir + "/model_results.json"
-    drift_default_days = 7
-    drift_ks_pvalue_threshold = 0.05
-
-    # Where the exported servable model goes (this is what gets baked into the Docker image)
-    export_dir = "models/model"
-    model_path = export_dir
-
-    # Serving ports
-    port = 5001
-    upstream_port = 5002
-    upstream_host = "127.0.0.1"
-
-    # Where the endpoint lives in production
-    PROD_ENDPOINT = "https://mlops-itu-jtk.ondigitalocean.app"
-
     print("Configuration loaded")
-
-    mlflow_tracking_uri = f"sqlite:///{mlflow_state_dir}/mlflow.db"
-    mlflow_artifact_location = "./mlflow-state/artifacts"
 
     setup_mlflow_tracking(experiment_name)
     print("MLflow tracking URI:", mlflow.get_tracking_uri())
@@ -453,10 +454,18 @@ if __name__ == "__main__":
 
     experiment = mlflow.get_experiment_by_name(experiment_name)
     experiment_ids = [experiment.experiment_id]
-    experiment_ids
+
+    # The best run of the experiment is the one with the highest test F1-score
+    experiment_best = mlflow.search_runs(
+        experiment_ids=experiment_ids,
+        order_by=["metrics.test_f1_score DESC"],
+        max_results=1,
+    ).iloc[0]
+    print("Best run:", experiment_best["run_id"])
+    print("Test F1-score:", experiment_best.get("metrics.test_f1_score"))
 
     with open(model_results_path, "r") as f:
-    model_results = json.load(f)
+        model_results = json.load(f)
     pprint(model_results["classification_report"])
 
     client = MlflowClient()
@@ -579,14 +588,12 @@ if __name__ == "__main__":
 
     app = FastAPI(docs_url=None, openapi_url=None, redoc_url=None)
 
-    @app.get("/health")
-
-    @app.get("/version")
-
-    @app.post("/invocations")
-    @app.post("/infer")
-
-    @app.get("/drift")
+    # Handlers are defined at module level above; register them on the app here
+    app.get("/health")(health)
+    app.get("/version")(version_endpoint)
+    app.post("/invocations")(invocations)
+    app.post("/infer")(invocations)
+    app.get("/drift")(drift)
     print("API defined")
 
     # uvicorn.run would block the notebook, so the API runs in a background thread

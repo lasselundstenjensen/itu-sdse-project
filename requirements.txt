@@ -13,4 +13,8 @@ torch
 torchvision
 pillow
 boto3
+fastapi
+uvicorn
+requests
+scipy
 -e .
