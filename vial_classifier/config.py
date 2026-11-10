@@ -8,18 +8,6 @@ load_dotenv()
 
 # Paths
 PROJ_ROOT = Path(__file__).resolve().parents[1]
-logger.info(f"PROJ_ROOT path is: {PROJ_ROOT}")
-
-DATA_DIR = PROJ_ROOT / "data"
-RAW_DATA_DIR = DATA_DIR / "raw"
-INTERIM_DATA_DIR = DATA_DIR / "interim"
-PROCESSED_DATA_DIR = DATA_DIR / "processed"
-EXTERNAL_DATA_DIR = DATA_DIR / "external"
-
-MODELS_DIR = PROJ_ROOT / "models"
-
-REPORTS_DIR = PROJ_ROOT / "reports"
-FIGURES_DIR = REPORTS_DIR / "figures"
 
 # If tqdm is installed, configure loguru with tqdm.write
 # https://github.com/Delgan/loguru/issues/135
@@ -56,6 +44,8 @@ S3_ENDPOINT = "https://itudsip.hel1.your-objectstorage.com"
 S3_BUCKET = "data"
 
 # Paths (relative to the project root)
+DATA_DIR = PROJ_ROOT / "data"
+MODELS_DIR = PROJ_ROOT / "models"
 ARTIFACT_DIR = "artifacts"
 MLFLOW_STATE_DIR = "mlflow-state"
 IMAGE_DATA_DIR = DATA_DIR / "images" / "raw"
@@ -68,8 +58,12 @@ DRIFT_BASELINE_STATS_PATH = ARTIFACT_DIR + "/drift_baseline_stats.json"
 CLASS_NAMES_PATH = ARTIFACT_DIR + "/class_names.json"
 IMAGE_STATISTICS_PATH = ARTIFACT_DIR + "/image_statistics.json"
 INFERENCE_LOG_PATH = ARTIFACT_DIR + "/inference_log.json"
+
+#export.py
 EXPORT_DIR = MODELS_DIR / "model"       
-MODEL_ARTIFACT_PATH = "model_pyfunc"     
+MODEL_ARTIFACT_PATH = "model_pyfunc"   
+
+# Drift.py
 DRIFT_DEFAULT_DAYS = 7
 DRIFT_KS_PVALUE_THRESHOLD = 0.05
 
