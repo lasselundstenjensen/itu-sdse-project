@@ -1,12 +1,12 @@
 """Fetch the vial dataset from the object store and load it as (image_path, label) pairs."""
 
-from concurrent.futures import ThreadPoolExecutor, as_completed
+from concurrent.futures import ThreadPoolExecutor, as_completed #ThreadPoolExecutor lets you download several images simultaneously
 import csv
 from pathlib import Path
 import subprocess
 import sys
 
-import boto3
+import boto3 
 from botocore import UNSIGNED
 from botocore.config import Config
 import pandas as pd
@@ -19,16 +19,14 @@ def _setup_s3_client():
     return boto3.client(
         "s3",
         endpoint_url=config.S3_ENDPOINT,
-        aws_access_key_id="",
-        aws_secret_access_key="",
-        config=Config(signature_version=UNSIGNED),
+        config=Config(signature_version=UNSIGNED), #deleted access keys since it is a public bucket
     )
 
 
 def _download_file_with_boto3(s3_client, key, output_path):
-    """Download one file. Returns True if downloaded, False if skipped or failed."""
-    output_path = Path(output_path)
-    if output_path.exists():
+    """Download one file from the object storage. Returns True if downloaded, False if skipped or failed."""
+    output_path = Path(output_path) #changes the string into a path
+    if output_path.exists(): # avoids redownloading files
         return False
     try:
         s3_client.download_file(config.S3_BUCKET, key, str(output_path)) 
@@ -41,13 +39,16 @@ def _download_file_with_boto3(s3_client, key, output_path):
 
 
 def download_files_from_metadata(metadata_path, output_dir, prefix=""):
-    """Download every file listed in a metadata CSV from the object store."""       s3_client = _setup_s3_client()
+    """Download every file listed in a metadata_CSV from the object store."""    
+    # prefix tells the storage system where to find the image inside the bucket  
+    s3_client = _setup_s3_client()
     Path(output_dir).mkdir(parents=True, exist_ok=True)
 
     with open(metadata_path) as f:
-        rows = list(csv.DictReader(f))
+        rows = list(csv.DictReader(f)) #Reads the entire CSV file and converts each row into a dictionary
 
-    downloaded_count = skipped_count = failed_count = 0  # [CHANGED] Was 3 separate lines. Three counters, all starting at 0.
+    downloaded_count = skipped_count = failed_count = 0 #initializing all to 0
+
     with ThreadPoolExecutor(max_workers=8) as executor:
         futures = {}
         for row in rows:
@@ -55,12 +56,11 @@ def download_files_from_metadata(metadata_path, output_dir, prefix=""):
             key = f"{prefix}{filename}"
             output_path = Path(output_dir) / filename
             future = executor.submit(_download_file_with_boto3, s3_client, key, output_path)
-            futures[future] = output_path # [CHANGED] key variable dropped; key was never used afterwards.
-
+            futures[future] =(key, output_path) #keeping both variables in case of failed downloads
         for future in as_completed(futures):
             if future.result():
                 downloaded_count += 1
-            elif futures[future].exists():
+            elif output_path.exists():
                 skipped_count += 1
             else:
                 failed_count += 1
@@ -69,14 +69,14 @@ def download_files_from_metadata(metadata_path, output_dir, prefix=""):
 
 
 def pull_data_from_dvc():
-    """Fetch the DVC-tracked metadata CSVs, then the training and test images they list."""
-    subprocess.run([sys.executable, "-m", "dvc", "pull"], check=True)
+    """Fetch the DVC-tracked metadata CSVs (DVC allows for reproduction of the experiment later) , then the training and test images they list."""
+    subprocess.run([sys.executable, "-m", "dvc", "pull"], check=True)  #Runs a command in the operating system from inside Python
     download_files_from_metadata(config.METADATA_PATH, config.IMAGE_DATA_DIR, "images/raw/")
     download_files_from_metadata(config.TEST_METADATA_PATH, config.TEST_DATA_DIR, "test/")
 
 
 def load_image_dataset(metadata_path=config.METADATA_PATH, image_data_dir=config.IMAGE_DATA_DIR):
-    """Return a list of (image_path, label) for every image in the metadata that exists on disk."""
+    """Return a list of (image_path, label)/ python dataset for every image in the metadata that exists on disk."""
     print(f"Loading image dataset from {image_data_dir}")
     print(f"Using metadata from {metadata_path}")
 
@@ -89,11 +89,12 @@ def load_image_dataset(metadata_path=config.METADATA_PATH, image_data_dir=config
     image_dataset = []
     missing_files = []
     for _, row in metadata.iterrows():
-        image_path = Path(image_data_dir) / row["filename"]
+        filename = row["filename"]
+        label = int(row["class"])
+        image_path = Path(image_data_dir) / filename
         if image_path.exists():
-            image_dataset.append((image_path, int(row["class"]))) # [CHANGED] The notebook first stored filename and label in variables; now it is inlined here
-        else:
-            missing_files.append(row["filename"])
+            image_dataset.append((image_path, label)) 
+            missing_files.append(filename)
 
     print(f"Loaded {len(image_dataset)} valid images with labels")
     if missing_files:
