@@ -1,0 +1,21 @@
+# Python
+__pycache__/
+*.pyc
+.venv/
+*.egg-info/
+.pytest_cache/
+.ruff_cache/
+
+# Pipeline outputs (produced by training, never committed)
+artifacts/
+mlflow-state/
+models/*
+!models/.gitkeep
+
+# Images downloaded from the object store (metadata is tracked by DVC)
+data/images/raw/
+data/test/*.jpg
+
+# Editors / OS
+.vscode/
+.DS_Store
