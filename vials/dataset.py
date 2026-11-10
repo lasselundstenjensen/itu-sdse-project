@@ -1,17 +1,17 @@
-import csv
 from concurrent.futures import ThreadPoolExecutor, as_completed
+import csv
+import json
 import subprocess
 
 import boto3
 from botocore import UNSIGNED
 from botocore.config import Config
-import pandas as pd
-import typer
-import numpy as np
 from loguru import logger
-from torch.utils.data import DataLoader, Dataset
+import numpy as np
+import pandas as pd
 import torch
-import json
+from torch.utils.data import DataLoader, Dataset
+import typer
 import yaml
 
 from vials.config import (
@@ -33,15 +33,17 @@ app = typer.Typer()
 S3_ENDPOINT = "https://itudsip.hel1.your-objectstorage.com"
 S3_BUCKET = "data"
 
+
 def _setup_s3_client():
     """Create a boto3 S3 client configured for Hetzner's public bucket."""
     return boto3.client(
-        's3',
+        "s3",
         endpoint_url=S3_ENDPOINT,
-        aws_access_key_id='',
-        aws_secret_access_key='',
-        config=Config(signature_version=UNSIGNED)
+        aws_access_key_id="",
+        aws_secret_access_key="",
+        config=Config(signature_version=UNSIGNED),
     )
+
 
 def _download_file_with_boto3(s3_client, key, output_path):
     """Download a single file from S3 using boto3."""
@@ -50,9 +52,10 @@ def _download_file_with_boto3(s3_client, key, output_path):
     try:
         s3_client.download_file(S3_BUCKET, key, str(output_path))
         return True
-    except Exception as e:
+    except Exception as e:  # noqa: BLE001 - keep notebook behaviour: skip any failed download
         print(f"Failed to download {key}: {e}")
         return False
+
 
 def download_files_from_metadata(metadata_path, output_dir, prefix=""):
     """Download all files listed in a metadata csv from the object store."""
@@ -85,12 +88,16 @@ def download_files_from_metadata(metadata_path, output_dir, prefix=""):
                 else:
                     failed_count += 1
 
-    print(f"Downloaded {downloaded_count} images, skipped {skipped_count} existing, failed {failed_count}")
+    print(
+        f"Downloaded {downloaded_count} images, skipped {skipped_count} existing, failed {failed_count}"
+    )
+
 
 def pull_data_from_dvc():
     """Pull the training and test images listed in the metadata from the object store."""
     download_files_from_metadata(METADATA_PATH, IMAGE_DATA_DIR, "images/raw/")
     download_files_from_metadata(TEST_DATA_DIR / "metadata.csv", TEST_DATA_DIR, "test/")
+
 
 def load_image_dataset():
     """Load (image_path, label) pairs from the raw images and the metadata."""
@@ -120,9 +127,11 @@ def load_image_dataset():
 
     return image_dataset
 
+
 def count_classes(labels):
     unique, counts = np.unique(labels, return_counts=True)
     return dict(zip(unique, counts))
+
 
 def print_section_header(title):
     """Pretty print a section header so the job log is readable."""
@@ -130,11 +139,13 @@ def print_section_header(title):
     logger.info(title)
     logger.info("=" * 50)
 
+
 def dump_class_names():
     class_names = {0: "good", 1: "defective"}
     with open(CLASS_NAMES_PATH, "w") as f:
         json.dump(class_names, f, indent=2)
     logger.info("Class names saved to {}", CLASS_NAMES_PATH)
+
 
 class GlassVialDataset(Dataset):
     """Loads vial images and their labels and applies the transform."""
@@ -154,8 +165,8 @@ class GlassVialDataset(Dataset):
         label = self.labels[idx]
 
         with Image.open(image_path) as img:
-            if img.mode != 'RGB':
-                img = img.convert('RGB')
+            if img.mode != "RGB":
+                img = img.convert("RGB")
             image = img.copy()
 
         if self.transform:
@@ -163,9 +174,14 @@ class GlassVialDataset(Dataset):
 
         return image, label
 
-def split_dataset(image_dataset, train_ratio=0.70, val_ratio=0.15, test_ratio=0.15, random_seed=42):
+
+def split_dataset(
+    image_dataset, train_ratio=0.70, val_ratio=0.15, test_ratio=0.15, random_seed=42
+):
     """Stratified split so both classes keep the same balance in every set."""
-    print(f"\nSplitting dataset into train ({train_ratio}), val ({val_ratio}), test ({test_ratio})...")
+    print(
+        f"\nSplitting dataset into train ({train_ratio}), val ({val_ratio}), test ({test_ratio})..."
+    )
 
     np.random.seed(random_seed)
     torch.manual_seed(random_seed)
@@ -182,8 +198,8 @@ def split_dataset(image_dataset, train_ratio=0.70, val_ratio=0.15, test_ratio=0.
         train_size = int(total * train_ratio)
         val_size = int(total * val_ratio)
         train_data = data[:train_size]
-        val_data = data[train_size:train_size + val_size]
-        test_data = data[train_size + val_size:]
+        val_data = data[train_size : train_size + val_size]
+        test_data = data[train_size + val_size :]
         return train_data, val_data, test_data
 
     train_0, val_0, test_0 = split_class(class_0)
@@ -211,6 +227,7 @@ def split_dataset(image_dataset, train_ratio=0.70, val_ratio=0.15, test_ratio=0.
 
     return train_dataset, val_dataset, test_dataset
 
+
 def save_split(split, path):
     """Write (image_path, label) pairs as a filename,label csv relative to IMAGE_DATA_DIR."""
     pd.DataFrame(
@@ -219,23 +236,31 @@ def save_split(split, path):
     ).to_csv(path, index=False)
     logger.info("Saved {} rows to {}", len(split), path)
 
+
 def load_split(path):
     """Read a split csv written by save_split back into (image_path, label) pairs."""
     df = pd.read_csv(path)
-    return [(IMAGE_DATA_DIR / filename, int(label)) for filename, label in zip(df["filename"], df["label"])]
+    return [
+        (IMAGE_DATA_DIR / filename, int(label))
+        for filename, label in zip(df["filename"], df["label"])
+    ]
+
 
 def save_splits(train_dataset, val_dataset, test_dataset, output_dir=PROCESSED_DATA_DIR):
     output_dir.mkdir(parents=True, exist_ok=True)
     for name, split in zip(SPLIT_NAMES, (train_dataset, val_dataset, test_dataset)):
         save_split(split, output_dir / f"{name}.csv")
 
+
 def load_splits(input_dir=PROCESSED_DATA_DIR):
     """Load the train/val/test splits exported by this stage."""
     return tuple(load_split(input_dir / f"{name}.csv") for name in SPLIT_NAMES)
 
+
 def load_batch_size():
     with open(TRAINING_CONFIG_PATH) as f:
         return yaml.safe_load(f)["training"]["batch_size"]
+
 
 def save_image_statistics(train_loader):
     """Compute channel mean/std over the training loader and save them as an artifact."""
@@ -244,8 +269,10 @@ def save_image_statistics(train_loader):
         json.dump(image_stats, f, indent=2)
     logger.info("Image statistics saved to {}", IMAGE_STATISTICS_PATH)
 
-def create_dataloaders(train_dataset, val_dataset, test_dataset,
-                       train_transforms, val_transforms, batch_size=None):
+
+def create_dataloaders(
+    train_dataset, val_dataset, test_dataset, train_transforms, val_transforms, batch_size=None
+):
     if batch_size is None:
         batch_size = load_batch_size()
     print(f"\nCreating DataLoaders with batch_size={batch_size}...")
@@ -261,9 +288,13 @@ def create_dataloaders(train_dataset, val_dataset, test_dataset,
     # GPU Optimization, so only use when one is available
     pin_memory = torch.cuda.is_available()
 
-    train_loader = DataLoader(train_data, batch_size=batch_size, shuffle=True, pin_memory=pin_memory)
+    train_loader = DataLoader(
+        train_data, batch_size=batch_size, shuffle=True, pin_memory=pin_memory
+    )
     val_loader = DataLoader(val_data, batch_size=batch_size, shuffle=False, pin_memory=pin_memory)
-    test_loader = DataLoader(test_data, batch_size=batch_size, shuffle=False, pin_memory=pin_memory)
+    test_loader = DataLoader(
+        test_data, batch_size=batch_size, shuffle=False, pin_memory=pin_memory
+    )
 
     print(f"  Train: {len(train_loader)} batches")
     print(f"  Val: {len(val_loader)} batches")
@@ -274,7 +305,7 @@ def create_dataloaders(train_dataset, val_dataset, test_dataset,
 
 @app.command()
 def main():
-    subprocess.run(["dvc", "pull"])
+    subprocess.run(["dvc", "pull"], check=False)
     pull_data_from_dvc()
 
     dataset = load_image_dataset()
@@ -298,7 +329,11 @@ def main():
 
     train_transforms, val_transforms = get_transforms()
     train_loader, _, _ = create_dataloaders(
-        train_dataset, val_dataset, test_dataset, train_transforms, val_transforms,
+        train_dataset,
+        val_dataset,
+        test_dataset,
+        train_transforms,
+        val_transforms,
     )
     save_image_statistics(train_loader)
 

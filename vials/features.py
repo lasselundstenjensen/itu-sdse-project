@@ -1,6 +1,6 @@
 import numpy as np
-import yaml
 from torchvision import transforms
+import yaml
 
 from vials.config import TRAINING_CONFIG_PATH
 
@@ -35,33 +35,40 @@ def calculate_image_statistics(data_loader):
         "total_samples": total_samples,
     }
 
+
 def load_image_specs():
     with open(TRAINING_CONFIG_PATH) as f:
         return yaml.safe_load(f)["image_specs"]
+
 
 def define_transforms(image_size, transform_mean, transform_std):
     print("Defining image transforms...")
 
     # Training transforms with data augmentation
-    train_transforms = transforms.Compose([
-        transforms.Resize(image_size),
-        transforms.RandomHorizontalFlip(p=0.5),
-        transforms.RandomRotation(10),
-        transforms.ColorJitter(brightness=0.2, contrast=0.2, saturation=0.2),
-        transforms.ToTensor(),
-        transforms.Normalize(mean=transform_mean, std=transform_std),
-    ])
+    train_transforms = transforms.Compose(
+        [
+            transforms.Resize(image_size),
+            transforms.RandomHorizontalFlip(p=0.5),
+            transforms.RandomRotation(10),
+            transforms.ColorJitter(brightness=0.2, contrast=0.2, saturation=0.2),
+            transforms.ToTensor(),
+            transforms.Normalize(mean=transform_mean, std=transform_std),
+        ]
+    )
 
     # Validation transforms (no augmentation)
-    val_transforms = transforms.Compose([
-        transforms.Resize(image_size),
-        transforms.ToTensor(),
-        transforms.Normalize(mean=transform_mean, std=transform_std),
-    ])
+    val_transforms = transforms.Compose(
+        [
+            transforms.Resize(image_size),
+            transforms.ToTensor(),
+            transforms.Normalize(mean=transform_mean, std=transform_std),
+        ]
+    )
 
     print("Training transforms: Resize, flip, rotation, jitter, ToTensor, Normalize")
     print("Validation transforms: Resize, ToTensor, Normalize")
     return train_transforms, val_transforms
+
 
 def get_transforms():
     """Build train/val transforms from the image specs in the training config."""

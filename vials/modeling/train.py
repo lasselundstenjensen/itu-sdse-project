@@ -1,12 +1,15 @@
-from pathlib import Path
-
 from loguru import logger
-from tqdm import tqdm
-import typer
 import mlflow
+import typer
 
-from vials.config import MODELS_DIR, PROCESSED_DATA_DIR, ARTIFACTS_DIR, MLFLOW_STATE_DIR, MLFLOW_TRACKING_URI, EXPERIMENT_NAME, MLFLOW_ARTIFACT_LOCATION
-
+from vials.config import (
+    ARTIFACTS_DIR,
+    EXPERIMENT_NAME,
+    MLFLOW_ARTIFACT_LOCATION,
+    MLFLOW_STATE_DIR,
+    MLFLOW_TRACKING_URI,
+    MODELS_DIR,
+)
 
 app = typer.Typer()
 
@@ -32,7 +35,6 @@ def main():
 
     setup_mlflow_tracking(EXPERIMENT_NAME)
     logger.info("MLflow tracking URI: {}", mlflow.get_tracking_uri())
-    
 
 
 if __name__ == "__main__":
