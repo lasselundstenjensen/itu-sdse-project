@@ -10,6 +10,9 @@ from botocore.config import Config
 import pandas as pd
 import numpy as np
 import torch
+from PIL import Image
+from torch.utils.data import DataLoader, Dataset
+from vial_classifier.features import define_transforms
 
 from vial_classifier.config import (
     IMAGE_DIR,
@@ -20,7 +23,8 @@ from vial_classifier.config import (
     TEST_METADATA_PATH, RANDOM_STATE,
     TEST_RATIO,
     TRAIN_RATIO,
-    VAL_RATIO
+    VAL_RATIO,
+    BATCH_SIZE
 )
 
 app = typer.Typer()
@@ -176,6 +180,64 @@ def split_dataset(
     print(f"  Test  - Class 0: {test_labels.count(0)}, Class 1: {test_labels.count(1)}")
 
     return train_dataset, val_dataset, test_dataset
+
+
+class GlassVialDataset(Dataset):
+    """Loads vial images and their labels and applies the transform."""
+
+    def __init__(self, image_paths, labels, transform=None):
+        self.image_paths = image_paths
+        self.labels = labels
+        self.transform = transform
+
+    def __len__(self):
+        return len(self.image_paths)
+
+    def __getitem__(self, idx):
+        image_path = self.image_paths[idx]
+        label = self.labels[idx]
+
+        with Image.open(image_path) as img:
+            if img.mode != "RGB":
+                img = img.convert("RGB")
+            image = img.copy()
+
+        if self.transform:
+            image = self.transform(image)
+
+        return image, label
+
+
+def create_dataloaders(train_dataset, val_dataset, test_dataset, batch_size=BATCH_SIZE):
+    print(f"\nCreating DataLoaders with batch_size={batch_size}...")
+
+    train_transforms, val_transforms = define_transforms()
+
+    train_paths, train_labels = zip(*train_dataset) if train_dataset else ([], [])
+    val_paths, val_labels = zip(*val_dataset) if val_dataset else ([], [])
+    test_paths, test_labels = zip(*test_dataset) if test_dataset else ([], [])
+
+    train_data = GlassVialDataset(list(train_paths), list(train_labels), train_transforms)
+    val_data = GlassVialDataset(list(val_paths), list(val_labels), val_transforms)
+    test_data = GlassVialDataset(list(test_paths), list(test_labels), val_transforms)
+
+    # num_workers=0 loads images in the main process (simple and deterministic)
+    train_loader = DataLoader(
+        train_data, batch_size=batch_size, shuffle=True, num_workers=0, pin_memory=True
+    )
+    val_loader = DataLoader(
+        val_data, batch_size=batch_size, shuffle=False, num_workers=0, pin_memory=True
+    )
+    test_loader = DataLoader(
+        test_data, batch_size=batch_size, shuffle=False, num_workers=0, pin_memory=True
+    )
+
+    print(f"  Train: {len(train_loader)} batches")
+    print(f"  Val: {len(val_loader)} batches")
+    print(f"  Test: {len(test_loader)} batches")
+
+    return train_loader, val_loader, test_loader
+
 
 @app.command()
 def main():
