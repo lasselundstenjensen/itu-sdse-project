@@ -18,8 +18,8 @@ def print_section_header(title):
 
 def setup_mlflow_tracking(experiment_name=None):
     """Point MLflow at the local state dir and create the experiment if needed."""
-    os.makedirs(config.mlflow_state_dir, exist_ok=True)
-    mlflow.set_tracking_uri(config.mlflow_tracking_uri)
+    os.makedirs(config.MLFLOW_STATE_DIR, exist_ok=True)
+    mlflow.set_tracking_uri(config.MLFLOW_TRACKING_URI)
 
     if experiment_name is None:
         return
@@ -27,8 +27,7 @@ def setup_mlflow_tracking(experiment_name=None):
     experiment = mlflow.get_experiment_by_name(experiment_name)
     if experiment is None:
         mlflow.create_experiment(
-            experiment_name, artifact_location=config.mlflow_artifact_location
+            experiment_name, artifact_location=config.MLFLOW_ARTIFACT_LOCATION
         )
     mlflow.set_experiment(experiment_name)
 
-    setup_mlflow_tracking(experiment_name)
