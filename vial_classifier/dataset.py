@@ -8,6 +8,8 @@ import typer
 from botocore import UNSIGNED
 from botocore.config import Config
 import pandas as pd
+import numpy as np
+import torch
 
 from vial_classifier.config import (
     IMAGE_DIR,
@@ -15,7 +17,10 @@ from vial_classifier.config import (
     S3_BUCKET,
     S3_ENDPOINT,
     TEST_DATA_DIR,
-    TEST_METADATA_PATH,
+    TEST_METADATA_PATH, RANDOM_STATE,
+    TEST_RATIO,
+    TRAIN_RATIO,
+    VAL_RATIO
 )
 
 app = typer.Typer()
@@ -115,6 +120,62 @@ def load_image_dataset(metadata_path=METADATA_PATH, image_data_dir=IMAGE_DIR):
         print(f"Warning: {len(missing_files)} image files not found")
 
     return image_dataset
+
+def split_dataset(
+    image_dataset,
+    train_ratio=TRAIN_RATIO,
+    val_ratio=VAL_RATIO,
+    test_ratio=TEST_RATIO,
+    random_seed=RANDOM_STATE,
+):
+    """Stratified split so both classes keep the same balance in every set."""
+    print(
+        f"\nSplitting dataset into train ({train_ratio}), val ({val_ratio}), test ({test_ratio})..."
+    )
+
+    np.random.seed(random_seed)
+    torch.manual_seed(random_seed)
+
+    class_0 = [(path, label) for path, label in image_dataset if label == 0]
+    class_1 = [(path, label) for path, label in image_dataset if label == 1]
+    print(f"Class distribution before split: Class 0: {len(class_0)}, Class 1: {len(class_1)}")
+
+    np.random.shuffle(class_0)
+    np.random.shuffle(class_1)
+
+    def split_class(data):
+        total = len(data)
+        train_size = int(total * train_ratio)
+        val_size = int(total * val_ratio)
+        train_data = data[:train_size]
+        val_data = data[train_size : train_size + val_size]
+        test_data = data[train_size + val_size :]
+        return train_data, val_data, test_data
+
+    train_0, val_0, test_0 = split_class(class_0)
+    train_1, val_1, test_1 = split_class(class_1)
+
+    train_dataset = train_0 + train_1
+    val_dataset = val_0 + val_1
+    test_dataset = test_0 + test_1
+
+    np.random.shuffle(train_dataset)
+    np.random.shuffle(val_dataset)
+    np.random.shuffle(test_dataset)
+
+    print("Split complete:")
+    print(f"  Training set: {len(train_dataset)} images")
+    print(f"  Validation set: {len(val_dataset)} images")
+    print(f"  Test set: {len(test_dataset)} images")
+
+    train_labels = [label for _, label in train_dataset]
+    val_labels = [label for _, label in val_dataset]
+    test_labels = [label for _, label in test_dataset]
+    print(f"  Train - Class 0: {train_labels.count(0)}, Class 1: {train_labels.count(1)}")
+    print(f"  Val   - Class 0: {val_labels.count(0)}, Class 1: {val_labels.count(1)}")
+    print(f"  Test  - Class 0: {test_labels.count(0)}, Class 1: {test_labels.count(1)}")
+
+    return train_dataset, val_dataset, test_dataset
 
 @app.command()
 def main():
