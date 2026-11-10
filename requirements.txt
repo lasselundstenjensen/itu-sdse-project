@@ -2,6 +2,7 @@ loguru
 pip
 pytest
 python-dotenv
+pyyaml
 ruff
 tqdm
 typer
