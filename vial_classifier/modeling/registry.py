@@ -12,6 +12,7 @@ The exported directory is what CI uploads as the `model` artifact.
 from datetime import UTC, datetime
 import json
 from pathlib import Path
+from pprint import pformat
 import shutil
 import tempfile
 import time
@@ -40,6 +41,14 @@ def get_best_run(experiment_name=config.EXPERIMENT_NAME):
         f"(test F1-score: {experiment_best.get('metrics.test_f1_score')})"
     )
     return experiment_best
+
+
+def load_model_results(model_results_path=config.MODEL_RESULTS_PATH):
+    """Load the test-set results written at training time and log the classification report."""
+    with open(model_results_path, "r") as f:
+        model_results = json.load(f)
+    logger.info(f"Classification report:\n{pformat(model_results['classification_report'])}")
+    return model_results
 
 
 def get_production_model(client, model_name=config.MODEL_NAME):
@@ -257,6 +266,7 @@ def main(export_dir: Path = config.EXPORT_DIR):
     client = MlflowClient()
 
     experiment_best = get_best_run()
+    load_model_results()
     _, _, prod_model_run_id = get_production_model(client)
 
     run_id = select_run_to_promote(experiment_best, prod_model_run_id)

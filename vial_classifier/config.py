@@ -83,6 +83,7 @@ MODEL_ARTIFACT_PATH = "model_pyfunc"
 # --- Serving & drift ----------------------------------------------------------
 SERVING_PORT = 5001
 UPSTREAM_PORT = 5002
+PROD_ENDPOINT = "https://mlops-itu-jtk.ondigitalocean.app"
 UPSTREAM_HOST = "127.0.0.1"
 DRIFT_DEFAULT_DAYS = 7
 DRIFT_KS_PVALUE_THRESHOLD = 0.05

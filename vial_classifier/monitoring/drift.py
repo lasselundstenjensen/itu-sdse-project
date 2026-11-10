@@ -8,12 +8,16 @@ compared against the baseline statistics written at training time
 from datetime import UTC, datetime, timedelta
 import json
 from pathlib import Path
+from pprint import pformat
 
 from loguru import logger
 import numpy as np
 from scipy.stats import ks_2samp
+import typer
 
 from vial_classifier import config
+
+app = typer.Typer()
 
 # A shift of the mean confidence larger than this counts as drift on its own
 CONFIDENCE_MEAN_DIFF_THRESHOLD = 0.1
@@ -195,3 +199,24 @@ def detect_drift(logs, days=config.DRIFT_DEFAULT_DAYS, baseline_stats=None):
             "total": len(predictions),
         },
     }
+
+
+@app.command()
+def main(days: int = config.DRIFT_DEFAULT_DAYS):
+    """Run the drift check over the logged requests and report the result."""
+    logs = load_inference_logs(config.INFERENCE_LOG_PATH)
+    logger.info(f"Logged requests: {len(logs)}")
+    logger.info(pformat(logs[-3:]))
+
+    baseline = load_baseline_stats()
+    drift_results = detect_drift(logs, days=days, baseline_stats=baseline)
+    logger.info(f"Drift check results:\n{pformat(drift_results)}")
+
+    if drift_results["overall_drift_detected"]:
+        logger.warning("Drift detected - time to retrain and redeploy")
+    else:
+        logger.info("No drift detected")
+
+
+if __name__ == "__main__":
+    app()
