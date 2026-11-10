@@ -4,3 +4,21 @@ data/images/*.csv
 
 #packages
 .venv
+
+#model weights and notebook output
+/artifacts/
+*.pth
+
+# Python and environment
+__pycache__/
+.ipynb_checkpoints/
+.pytest_cache/
+.env
+
+# Created when the notebooks and the pipeline run
+mlflow-state/
+models/model/
+
+# Images downloaded by the training notebook (the *.dvc files stay in Git)
+data/images/raw/
+data/test/*.jpg
