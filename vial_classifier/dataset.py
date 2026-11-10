@@ -18,7 +18,7 @@ def _setup_s3_client():
     """Create a boto3 S3 client for the public (unsigned) Hetzner bucket."""
     return boto3.client(
         "s3",
-        endpoint_url=config.S3_ENDPOINT, # [CHANGED] Was the global S3_ENDPOINT. Points at Hetzner instead of AWS.
+        endpoint_url=config.S3_ENDPOINT,
         aws_access_key_id="",
         aws_secret_access_key="",
         config=Config(signature_version=UNSIGNED),
@@ -31,16 +31,17 @@ def _download_file_with_boto3(s3_client, key, output_path):
     if output_path.exists():
         return False
     try:
-        s3_client.download_file(config.S3_BUCKET, key, str(output_path)) # [CHANGED] config.S3_BUCKET instead of the global.
+        s3_client.download_file(config.S3_BUCKET, key, str(output_path)) 
         return True
     except Exception as e:
         print(f"Failed to download {key}: {e}")
         return False
 
+# Deleted download_with_dvc and _get_s3_key_from_url since they were not called in the notebook
+
 
 def download_files_from_metadata(metadata_path, output_dir, prefix=""):
-    """Download every file listed in a metadata CSV from the object store."""
-    s3_client = _setup_s3_client()
+    """Download every file listed in a metadata CSV from the object store."""       s3_client = _setup_s3_client()
     Path(output_dir).mkdir(parents=True, exist_ok=True)
 
     with open(metadata_path) as f:
