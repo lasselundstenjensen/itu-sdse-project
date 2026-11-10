@@ -1,29 +1,31 @@
-from pathlib import Path
-
-from loguru import logger
-from tqdm import tqdm
-import typer
-
-from vial_classifier.config import PROCESSED_DATA_DIR
-
-app = typer.Typer()
+from torchvision import transforms
+from vial_classifier.config import IMAGE_SIZE, TRANSFORM_MEAN, TRANSFORM_STD
 
 
-@app.command()
-def main(
-    # ---- REPLACE DEFAULT PATHS AS APPROPRIATE ----
-    input_path: Path = PROCESSED_DATA_DIR / "dataset.csv",
-    output_path: Path = PROCESSED_DATA_DIR / "features.csv",
-    # -----------------------------------------
-):
-    # ---- REPLACE THIS WITH YOUR OWN CODE ----
-    logger.info("Generating features from dataset...")
-    for i in tqdm(range(10), total=10):
-        if i == 5:
-            logger.info("Something happened for iteration 5.")
-    logger.success("Features generation complete.")
-    # -----------------------------------------
+def define_transforms():
+    print("Defining image transforms...")
 
+    # Training transforms with data augmentation
+    train_transforms = transforms.Compose(
+        [
+            transforms.Resize(IMAGE_SIZE),
+            transforms.RandomHorizontalFlip(p=0.5),
+            transforms.RandomRotation(10),
+            transforms.ColorJitter(brightness=0.2, contrast=0.2, saturation=0.2),
+            transforms.ToTensor(),
+            transforms.Normalize(mean=TRANSFORM_MEAN, std=TRANSFORM_STD),
+        ]
+    )
 
-if __name__ == "__main__":
-    app()
+    # Validation transforms (no augmentation)
+    val_transforms = transforms.Compose(
+        [
+            transforms.Resize(IMAGE_SIZE),
+            transforms.ToTensor(),
+            transforms.Normalize(mean=TRANSFORM_MEAN, std=TRANSFORM_STD),
+        ]
+    )
+
+    print("Training transforms: Resize, flip, rotation, jitter, ToTensor, Normalize")
+    print("Validation transforms: Resize, ToTensor, Normalize")
+    return train_transforms, val_transforms
