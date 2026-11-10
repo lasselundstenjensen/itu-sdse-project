@@ -20,6 +20,7 @@ METADATA_PATH = IMAGE_DATA_DIR / "metadata.csv"
 TEST_DATA_DIR = RAW_DATA_DIR / "test"
 
 TRAINING_CONFIG_PATH = PROJ_ROOT / "vials" / "modeling" / "training_config.yaml"
+TEST_DATA_DIR = RAW_DATA_DIR / "test"
 
 MODELS_DIR = PROJ_ROOT / "models"
 ARTIFACTS_DIR = PROJ_ROOT / "artifacts"
@@ -40,6 +41,31 @@ EXPERIMENT_NAME = "vial_image_classification"
 MODEL_NAME = "cnn_model"
 MLFLOW_TRACKING_URI = f"sqlite:///{(MLFLOW_STATE_DIR / 'mlflow.db').as_posix()}"
 MLFLOW_ARTIFACT_LOCATION = (MLFLOW_STATE_DIR / "artifacts").as_uri()
+
+MODEL_RESULTS_PATH = ARTIFACTS_DIR / "model_results.json"
+DRIFT_BASELINE_STATS_PATH = ARTIFACTS_DIR / "drift_baseline_stats.json"
+INFERENCE_LOG_PATH = ARTIFACTS_DIR / "inference_log.json"
+
+EXPERIMENT_NAME = "vial_image_classification"
+MODEL_NAME = "cnn_model"
+MLFLOW_TRACKING_URI = f"sqlite:///{(MLFLOW_STATE_DIR / 'mlflow.db').as_posix()}"
+MLFLOW_ARTIFACT_LOCATION = (MLFLOW_STATE_DIR / "artifacts").as_uri()
+
+# For serving and drift detection
+ARTIFACT_PATH = "model_pyfunc"  # name of the model inside an MLflow run
+
+DRIFT_DEFAULT_DAYS = 7
+DRIFT_KS_PVALUE_THRESHOLD = 0.05
+DRIFT_MEAN_DIFF_THRESHOLD = 0.1
+
+# Where the exported servable model goes (this is what gets baked into the Docker image)
+MODEL_PATH = MODELS_DIR / "model"
+
+# Serving ports
+PORT = 5001
+UPSTREAM_PORT = 5002
+UPSTREAM_HOST = "127.0.0.1"
+
 
 # If tqdm is installed, configure loguru with tqdm.write
 # https://github.com/Delgan/loguru/issues/135
