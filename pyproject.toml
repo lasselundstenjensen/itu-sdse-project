@@ -16,10 +16,19 @@ classifiers = [
     
 ]
 dependencies = [
+    "boto3>=1.44.0",
+    "dvc>=3.67.1",
+    "mlflow>=2.18",
+    "numpy>=2.5.4",
+    "pandas>=3.1.1",
+    "pillow>=13.0.0",
     "pip",
-    "pytest",
     "python-dotenv",
-    "ruff",
+    "requests>=2.34.2",
+    "scikit-learn>=1.9.1",
+    "scipy>=1.18.1",
+    "torch>=2.15.0",
+    "torchvision>=0.29.2",
 ]
 requires-python = "~=3.13.0"
 
@@ -36,3 +45,18 @@ extend-select = ["I"]  # Add import sorting
 known-first-party = ["vial_classifier"]
 force-sort-within-sections = true
 
+[tool.uv.sources]
+torch = { index = "pytorch-cpu" }
+torchvision = { index = "pytorch-cpu" }
+
+[[tool.uv.index]]
+name = "pytorch-cpu"
+url = "https://download.pytorch.org/whl/cpu"
+explicit = true
+
+[dependency-groups]
+dev = [
+    "ipykernel>=7.4.0",
+    "pytest>=9.2.0",
+    "ruff>=0.17.4",
+]
