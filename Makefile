@@ -76,6 +76,26 @@ endif
 test_environment:
 	$(PYTHON_INTERPRETER) test_environment.py
 
+## Run pytest test suite
+test: 
+	pytest -v
+
+## Run the FastAPI serving app locally
+serve:
+	uvicorn src.deployment.serve:app --host 0.0.0.0 --port 8000 --reload
+
+## Train the model
+train:
+	$(PYTHON_INTERPRETER) src/models/train.py
+
+## Run data preprocessing pipeline
+preprocess:
+	$(PYTHON_INTERPRETER) src/data/preprocess.py
+
+## Export best model artifact
+artifact-export:
+	$(PYTHON_INTERPRETER) src/models/export.py
+
 #################################################################################
 # PROJECT RULES                                                                 #
 #################################################################################
