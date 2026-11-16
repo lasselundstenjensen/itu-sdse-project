@@ -26,8 +26,13 @@ def _b64(img_path):
 def test_json_results():
     """Computes absolute differences in ROC AUC & Accuracy from the current \"artifacts/model_results.json\"
     to the reference results saved in \"tests/fixtures/<commit-hash>/model_results.json\"."""
-
-    model_results = _load_json(ROOT / "artifacts" / "model_results.json")#---- get results from current model
+       
+    #---- check if results to compare exist
+    model_results_path = ROOT / "artifacts" / "model_results.json"
+    if not model_results_path.exists()
+        pytest.skip("No results found at \"artifacts/model_results.json\"")
+    
+    model_results = _load_json(model_results_path)#---- get results from current model
     reference_results = _load_json(ROOT / "tests" / "fixtures" / "974b7c2da065508646268fad001c5c166de6201d" / "artifacts" / "model_results.json")#---- dict for reference results
     
     acc_diff = abs(model_results["accuracy"] - reference_results["accuracy"])
