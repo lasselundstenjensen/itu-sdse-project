@@ -1,6 +1,12 @@
 # Data
 /data/
 
+# Pipeline outputs
+/mlflow-state/
+/.dagger-mlflow-state/
+/artifacts/
+/models/model/
+
 # Mac OS-specific storage files
 .DS_Store
 

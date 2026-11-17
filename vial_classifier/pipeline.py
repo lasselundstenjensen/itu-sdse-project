@@ -17,7 +17,11 @@ import torch
 from vial_classifier import config
 from vial_classifier.dataset import load_image_dataset, pull_data_from_dvc
 from vial_classifier.features import build_features
-from vial_classifier.modeling.evaluate import evaluate_cnn_model
+from vial_classifier.modeling.evaluate import (
+    compute_baseline_statistics,
+    evaluate_cnn_model,
+    save_baseline_statistics,
+)
 from vial_classifier.modeling.export import export_model
 from vial_classifier.modeling.model import SimpleCNN
 from vial_classifier.modeling.registry import (
@@ -68,8 +72,11 @@ def train():
     optimal_threshold = tune_threshold(cnn_model, val_loader)
     test_results = evaluate_cnn_model(cnn_model, test_loader, threshold=optimal_threshold)
 
-
-
+    # Drift baseline on the validation set, with the tuned threshold
+    baseline_stats = compute_baseline_statistics(
+        cnn_model, val_loader, threshold=optimal_threshold
+    )
+    save_baseline_statistics(baseline_stats)
 
     torch.save(
         {

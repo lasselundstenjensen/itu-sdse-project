@@ -56,6 +56,8 @@ func base(client *dagger.Client) *dagger.Container {
 			"uv.lock",
 			"README.md",
 			".dvc/config",
+			// the metadata CSVs live in the DVC cache committed to git (there is no DVC remote)
+			".dvc/cache",
 			"data/**/*.dvc",
 		},
 	})
@@ -65,7 +67,10 @@ func base(client *dagger.Client) *dagger.Container {
 		From("ghcr.io/astral-sh/uv:python3.13-bookworm-slim").
 		WithDirectory("/app", src).
 		WithWorkdir("/app").
-		WithExec([]string{"uv", "sync", "--frozen"})
+		WithExec([]string{"uv", "sync", "--frozen"}).
+		// .git is not copied into the container, so tell DVC to work without git.
+		// --local writes .dvc/config.local inside the container only.
+		WithExec([]string{"uv", "run", "dvc", "config", "--local", "core.no_scm", "true"})
 }
 
 // Runs all test_ files
@@ -77,8 +82,13 @@ func Test(ctx context.Context, client *dagger.Client) error {
 }
 
 func Train(ctx context.Context, client *dagger.Client) error {
+	const stateDir = "../.dagger-mlflow-state"
+	if err := os.MkdirAll(stateDir, 0o755); err != nil {
+		return err
+	}
+
 	trained := base(client).
-		WithExec([]string{"uv", "run", "python", "-m", "vial_classifier.pipeline", "data"}).
+		WithDirectory("mlflow-state", client.Host().Directory(stateDir)).
 		WithExec([]string{"uv", "run", "python", "-m", "vial_classifier.pipeline", "train"}).
 		WithExec([]string{"uv", "run", "python", "-m", "vial_classifier.pipeline", "export"})
 
@@ -88,5 +98,10 @@ func Train(ctx context.Context, client *dagger.Client) error {
 	}
 
 	_, err = trained.Directory("artifacts").Export(ctx, "../artifacts")
+	if err != nil {
+		return err
+	}
+
+	_, err = trained.Directory("mlflow-state").Export(ctx, stateDir)
 	return err
 }
