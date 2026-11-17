@@ -1,0 +1,26 @@
+
+FROM python:3.11-slim
+
+WORKDIR /app
+
+# Install dependencies
+RUN pip install --no-cache-dir \
+    fastapi \
+    "uvicorn[standard]" \
+    torch \
+    numpy \
+    pillow
+
+# Copy FastAPI application
+COPY app/ /app/app/
+
+# Copy CNN architecture
+COPY src/ /app/src/
+
+# Copy trained checkpoint
+COPY models/model/vial_cnn_model.pth /app/models/model/vial_cnn_model.pth
+
+EXPOSE 5001
+
+# Start FastAPI
+CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "5001"]
