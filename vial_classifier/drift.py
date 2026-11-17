@@ -1,3 +1,9 @@
+"""Drift detection: Check if the model is seeing different data than it was trained on.
+
+Compares the inference log written by `SimpleLoggingWrapper`
+with the baseline written at training time by `evaluate.save_baseline_statistics`.
+"""
+
 from datetime import UTC, datetime, timedelta
 import json
 from pathlib import Path
@@ -25,7 +31,9 @@ def load_inference_logs(log_path=config.INFERENCE_LOG_PATH):
 
 
 def filter_logs_by_time(logs, days=config.DRIFT_DEFAULT_DAYS):
-    """Only keep log entries from the last N days."""
+    """Only keep log entries from the last N days. 
+    Entries with an unreadable timestamp are kept, as in the notebook."""
+
     if not logs:
         return []
     cutoff = datetime.now(UTC) - timedelta(days=days)
@@ -66,7 +74,9 @@ def calculate_confidence_metrics(confidences):
 
 
 def check_confidence_drift(current_confidences, baseline_stats):
-    """KS test of the current confidence scores against the baseline."""
+    """KS test of the current confidence scores against the baseline.
+    Drift if the KS p-value is below the threshold or the mean moved by more than 0.1. 
+    The baseline sample is random."""
     if not baseline_stats or "confidence_statistics" not in baseline_stats:
         return {
             "ks_statistic": 0.0,

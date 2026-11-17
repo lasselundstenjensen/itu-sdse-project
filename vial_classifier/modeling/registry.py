@@ -1,3 +1,9 @@
+"""MLflow model registry operations: register, compare and promote models.
+
+Only talks to MLflow (no torch, no data). Every function takes the MLflow `client`
+as an argument, because the notebooks used a global one.
+"""
+
 import time
 
 import mlflow
@@ -9,7 +15,6 @@ from vial_classifier import config
 from vial_classifier.utils import setup_mlflow_tracking
 
 PRODUCTION_ALIAS = "Production"
-
 
 def get_client():
     """Point MLflow at the local state dir and return a client for it."""
@@ -31,8 +36,8 @@ def wait_until_ready(client, model_name, model_version, max_attempts=10):
 
 
 def register_and_stage_model(client, run_id):
-    """Register the model logged by a training run and move it to Staging."""
-    model_uri = f"runs:/{run_id}/{config.ARTIFACT_PATH}"
+    """Register the run's model and move it to Staging, with tags and the best alias."""
+    model_uri = f"runs:/{run_id}/{config.MODEL_ARTIFACT_PATH}"
     model_details = mlflow.register_model(model_uri=model_uri, name=config.MODEL_NAME)
     wait_until_ready(client, model_details.name, model_details.version)
 
@@ -127,7 +132,7 @@ def promote_model(client, run_id):
     ]
     if not versions:
         model_details = mlflow.register_model(
-            f"runs:/{run_id}/{config.ARTIFACT_PATH}", name=model_name
+            f"runs:/{run_id}/{config.MODEL_ARTIFACT_PATH}", name=model_name
         )
         version = model_details.version
     else:
@@ -160,7 +165,6 @@ def promote_model(client, run_id):
 
 def select_and_promote_best_model(client=None):
     """Compare the best trained model with production and promote it if it wins.
-
     Returns the promoted version, or None if production was kept.
     """
     client = client or get_client()

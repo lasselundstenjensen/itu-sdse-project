@@ -2,7 +2,7 @@ from datetime import UTC, datetime, timedelta
 
 import numpy as np
 
-from vial_classifier.monitoring import drift
+from vial_classifier import drift
 
 BASELINE = {
     "confidence_statistics": {"mean": 0.5, "std": 0.05},

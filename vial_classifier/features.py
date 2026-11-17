@@ -1,15 +1,17 @@
 """Turn the (image_path, label) list into train/val/test DataLoaders, plus small dataset artifacts."""
 
 import json
-from pathlib import Path  
+from pathlib import Path
 
 import numpy as np
-import torch
 from PIL import Image
+import torch
 from torch.utils.data import DataLoader, Dataset
 from torchvision import transforms
 
-from vial_classifier import config  # [CHANGED] New: settings come from config.py instead of the past notebook globals
+from vial_classifier import (
+    config,  # [CHANGED] New: settings come from config.py instead of the past notebook globals
+)
 
 
 def calculate_image_statistics(data_loader):

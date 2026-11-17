@@ -41,7 +41,8 @@ def _download_file_with_boto3(s3_client, key, output_path):
 
 
 def download_files_from_metadata(metadata_path, output_dir, prefix=""):
-    """Download every file listed in a metadata CSV from the object store."""       s3_client = _setup_s3_client()
+    """Download every file listed in a metadata CSV from the object store."""       
+    s3_client = _setup_s3_client()
     Path(output_dir).mkdir(parents=True, exist_ok=True)
 
     with open(metadata_path) as f:

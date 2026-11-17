@@ -1,3 +1,12 @@
+"""MLflow model wrapper: the object that gets served.
+
+Takes an image (path, bytes or base64), preprocesses it like the validation images,
+runs the CNN, returns predictions and confidences, and appends one entry per image to
+the inference log that monitoring/drift.py reads.
+Its own module because MLflow pickles the class by module path: the serving container
+imports vial_classifier.modeling.wrapper, so serving never imports the training code.
+"""
+
 import base64
 from datetime import UTC, datetime
 from io import BytesIO
@@ -206,7 +215,7 @@ class SimpleLoggingWrapper(mlflow.pyfunc.PythonModel):
                 }
                 self._log_request(log_entry)
 
-            except (OSError, ValueError) as e:
+            except Exception as e: # noqa: BLE001
                 print(f"Error processing image {image_input}: {e}")
                 predictions.append(None)
                 confidences.append(None)
