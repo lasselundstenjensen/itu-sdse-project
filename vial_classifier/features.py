@@ -1,7 +1,9 @@
+
 import numpy as np
 import torch
 
 from vial_classifier.config import THRESHOLD
+
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 threshold = THRESHOLD
@@ -51,7 +53,13 @@ def calculate_image_statistics(data_loader):
     }
 
 
-def compute_baseline_statistics(model, data_loader, device=device, feature_layer="fc1", threshold=threshold):
+def compute_baseline_statistics(
+    model,
+    data_loader,
+    device=device,
+    feature_layer="fc1",
+    threshold=threshold,
+):
     """Compute baseline statistics for drift detection from a dataset."""
     print(f"\nComputing baseline statistics for drift detection...")
     print(f"Feature layer: {feature_layer}")
@@ -81,7 +89,7 @@ def compute_baseline_statistics(model, data_loader, device=device, feature_layer
 
     try:
         with torch.no_grad():
-            for batch_idx, (images, labels) in enumerate(data_loader):
+            for images, labels in data_loader:
                 images = images.to(device)
                 labels = labels.float().to(device).view(-1, 1)
 
