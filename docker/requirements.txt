@@ -1,0 +1,26 @@
+# Python 3.13 - Docker dependencies
+
+# Deep learning
+torch
+torchvision
+
+# MLflow and model tracking
+mlflow>=2.18
+
+# Data access and processing
+boto3
+dvc
+numpy
+pandas
+scikit-learn
+scipy
+pillow
+requests
+
+# Model serving
+fastapi
+uvicorn
+
+# Configuration and logging
+python-dotenv
+loguru
