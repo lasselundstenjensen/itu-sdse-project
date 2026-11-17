@@ -22,8 +22,8 @@ from vial_classifier.dataset import (
     split_dataset,
 )
 from vial_classifier.features import calculate_image_statistics, compute_baseline_statistics
+from vial_classifier.modeling.model import SimpleCNN
 from vial_classifier.modeling.train import (
-    SimpleCNN,
     evaluate_cnn_model,
     train_cnn_model,
     tune_threshold,
