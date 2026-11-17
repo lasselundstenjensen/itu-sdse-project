@@ -66,9 +66,18 @@ PORT = 5001
 UPSTREAM_PORT = 5002
 UPSTREAM_HOST = "127.0.0.1"
 
+# Hyperparameters
+import yaml
 
-# If tqdm is installed, configure loguru with tqdm.write
-# https://github.com/Delgan/loguru/issues/135
+with TRAINING_CONFIG_PATH.open() as f:
+    try:
+        training_config = yaml.safe_load(f)
+    except yaml.YAMLError as exc:
+        print(exc)
+
+HYPERPARAMS = training_config["training"]
+IMAGE_SPECS = training_config["image_specs"]
+
 try:
     from tqdm import tqdm
 
