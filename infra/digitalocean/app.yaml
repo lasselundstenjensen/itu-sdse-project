@@ -17,9 +17,14 @@ region: fra1
 # model image.
 #
 # There is no MLflow tracking server in production. The best model is picked
-# during training in CI; the serving container does not need MLflow at all -
-# it just answers prediction requests and writes its inference log to a file
-# inside the container that is thrown away on every redeploy.
+# during training in CI. The serving container (source/serve.py, built by the
+# ServeImage function in dagger/main.go) only has the mlflow *library*, to
+# load the exported model from models/model. It answers prediction requests
+# and writes its inference log to a file inside the container, which is
+# thrown away on every redeploy (so /drift starts from zero after a deploy).
+#
+# This file is used by `dagger call deploy-app`, which fills in the
+# placeholders below and runs `doctl apps create/update` with it.
 #
 # The two placeholders below are the parts YOU must fill in from your
 # pipeline before handing this spec to DigitalOcean:
@@ -35,8 +40,8 @@ region: fra1
 # (Without preserve_path_prefix the prefix would be stripped before
 # forwarding, so /invocations would arrive at the server as "/" and 404.)
 # These prefixes must match the endpoints your serving code actually
-# serves (/invocations, /infer, /health, /drift); the service names must
-# match the service name below.
+# serves (/invocations, /infer, /health, /version, /drift); the service names
+# must match the service name below.
 ingress:
   rules:
     - component:
@@ -62,6 +67,12 @@ ingress:
         preserve_path_prefix: true
       match:
         path:
+          prefix: /version
+    - component:
+        name: model-serve
+        preserve_path_prefix: true
+      match:
+        path:
           prefix: /drift
 
 services:
@@ -73,7 +84,7 @@ services:
       # ghcr.io path you pushed to (owner/image), with __OWNER__ filled in.
       registry_type: GHCR
       registry: ghcr.io
-      repository: __OWNER__/model-serve
+      repository: pocem/model-serve
       # Must be the exact tag your pipeline pushed (see __TAG__ above).
       tag: __TAG__
     # The size of the virtual machine running the container.
