@@ -20,7 +20,6 @@ from PIL import Image
 import torchvision.transforms as transforms
 import json
 from pathlib import Path
-from preprocessing import create_dataloders
 
 
 #configuration
@@ -43,8 +42,6 @@ pytorch_model_path = artifact_dir + "/vial_cnn_model.pth"
 model_results_path = artifact_dir + "/model_results.json"
 inference_log_path = artifact_dir + "/inference_log.json"
 drift_baseline_stats_path = artifact_dir + "/drift_baseline_stats.json"
-
-create_dataloders(,batch_size) = train_loader, val_loader, test_loader
 
 class SimpleCNN(nn.Module):
     """
@@ -374,45 +371,6 @@ def tune_threshold(model, val_loader, device=device, threshold_range=None):
     return best_threshold
 
 
-#CNN MODEL TRAINING
-torch.manual_seed(random_state)
-np.random.seed(random_state)
-
-if mlflow.active_run():
-    mlflow.end_run()
-    print("Ended previous active MLflow run")
-
-run = mlflow.start_run(run_name="training_notebook")
-
-# Log parameters to MLflow
-mlflow.log_param("model_architecture", "SimpleCNN")
-mlflow.log_param("batch_size", batch_size)
-mlflow.log_param("num_epochs", num_epochs)
-mlflow.log_param("learning_rate", learning_rate)
-mlflow.log_param("initial_threshold", threshold)
-mlflow.log_param("num_classes", num_classes)
-mlflow.log_param("image_size", "64x64")
-mlflow.log_param("random_seed", random_state)
-
-# Log model architecture details
-model_params = sum(p.numel() for p in SimpleCNN().parameters())
-trainable_params = sum(p.numel() for p in SimpleCNN().parameters() if p.requires_grad)
-mlflow.log_param("total_parameters", model_params)
-mlflow.log_param("trainable_parameters", trainable_params)
-
-cnn_model, training_history = train_cnn_model(
-    train_loader, val_loader,
-    num_epochs=num_epochs,
-    learning_rate=learning_rate,
-    device=device,
-    random_seed=random_state,
-)
-
-# Tune threshold on validation set
-optimal_threshold = tune_threshold(cnn_model, val_loader, device=device)
-
-# Evaluate on test set with optimal threshold
-test_results = evaluate_cnn_model(cnn_model, test_loader, device=device, threshold=optimal_threshold)
 
 def compute_baseline_statistics(model, data_loader, device=device, feature_layer="fc1", threshold=threshold):
     """Compute baseline statistics for drift detection from a dataset."""
@@ -531,26 +489,6 @@ def compute_baseline_statistics(model, data_loader, device=device, feature_layer
 
     finally:
         handle.remove()
-
-baseline_stats = compute_baseline_statistics(cnn_model, val_loader, threshold=optimal_threshold)
-
-with open(drift_baseline_stats_path, 'w') as f:
-    json.dump(baseline_stats, f, indent=2)
-print(f"Baseline statistics saved to {drift_baseline_stats_path}")
-
-# Log baseline statistics to MLflow
-mlflow.log_metric("baseline_image_mean_r", baseline_stats['image_statistics']['mean_r'])
-mlflow.log_metric("baseline_image_mean_g", baseline_stats['image_statistics']['mean_g'])
-mlflow.log_metric("baseline_image_mean_b", baseline_stats['image_statistics']['mean_b'])
-mlflow.log_metric("baseline_image_std_r", baseline_stats['image_statistics']['std_r'])
-mlflow.log_metric("baseline_image_std_g", baseline_stats['image_statistics']['std_g'])
-mlflow.log_metric("baseline_image_std_b", baseline_stats['image_statistics']['std_b'])
-mlflow.log_metric("baseline_class_0_count", baseline_stats['class_distribution']['class_0_count'])
-mlflow.log_metric("baseline_class_1_count", baseline_stats['class_distribution']['class_1_count'])
-mlflow.log_metric("baseline_confidence_mean", baseline_stats['confidence_statistics']['mean'])
-mlflow.log_metric("baseline_confidence_std", baseline_stats['confidence_statistics']['std'])
-mlflow.log_artifact(drift_baseline_stats_path, "drift_detection")
-
 
 
 class SimpleLoggingWrapper(mlflow.pyfunc.PythonModel):
@@ -741,31 +679,3 @@ class SimpleLoggingWrapper(mlflow.pyfunc.PythonModel):
             'raw_outputs': raw_outputs,
             'num_samples': len(image_inputs),
         }
-
-print("SimpleLoggingWrapper defined")
-
-print("\nSaving model artifacts...")
-
-# Save model state dict
-torch.save({
-    'model_state_dict': cnn_model.state_dict(),
-    'architecture': SimpleCNN.__name__,
-    'input_shape': (3, 64, 64),
-    'output_shape': (1,),
-    'threshold': optimal_threshold,
-    'num_classes': num_classes,
-}, pytorch_model_path)
-print(f"CNN model saved to {pytorch_model_path}")
-
-# Save model results
-with open(model_results_path, "w") as results_file:
-    json.dump(test_results, results_file, indent=2)
-print(f"Model results saved to {model_results_path}")
-
-mlflow.log_param("classification_threshold", optimal_threshold)
-
-# Log the pyfunc model with the SimpleLoggingWrapper as the model artifact
-wrapper = SimpleLoggingWrapper(model=cnn_model)
-mlflow.pyfunc.log_model("model_pyfunc", python_model=wrapper)
-print("Logged pyfunc model to the MLflow run")
-
