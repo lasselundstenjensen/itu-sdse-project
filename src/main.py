@@ -24,11 +24,11 @@ from pathlib import Path
 from pprint import pprint
 
 
-from read_load_data import get_image_dataset
-from preprocessing import define_transforms, split_dataset, create_dataloaders
+from src.data.read_load_data import get_image_dataset
+from src.data.preprocessing import define_transforms, split_dataset, create_dataloaders
 from utils import calculate_image_statistics, print_section_header
-from train import SimpleCNN, train_cnn_model, evaluate_cnn_model, tune_threshold, compute_baseline_statistics, SimpleLoggingWrapper
-from model_registry import wait_until_ready, register_model
+from src.model.train import SimpleCNN, train_cnn_model, evaluate_cnn_model, tune_threshold, compute_baseline_statistics, SimpleLoggingWrapper
+from src.model.model_registry import wait_until_ready, register_model
 
 max_date = "2024-01-31"
 min_date = "2024-01-01"

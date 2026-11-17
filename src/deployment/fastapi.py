@@ -1,10 +1,10 @@
-from fastapi import FastAPI, Query, Request, Response
+from src.deployment.fastapi import FastAPI, Query, Request, Response
 import urllib.error
 import urllib.request
 from pathlib import Path
 import json
-from serve_model_locally import start_scoring_server
-from drift_detection import load_baseline_stats, detect_drift, load_inference_logs
+from src.deployment.serve_model_locally import start_scoring_server
+from src.deployment.drift_detection import load_baseline_stats, detect_drift, load_inference_logs
 
 port = 5001
 upstream_port = 5002
