@@ -11,8 +11,8 @@ env/
 # Jupyter Notebook kontrol noktaları
 .ipynb_checkpoints/
 
-data/
-models/
+/data/
+/models/
 *.pt
 *.pth
 *.pkl
