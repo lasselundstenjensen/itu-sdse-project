@@ -1,3 +1,6 @@
+import json
+import os
+
 import mlflow
 import numpy as np
 from sklearn.metrics import (
@@ -10,10 +13,8 @@ from sklearn.metrics import (
     roc_auc_score,
 )
 import torch
-import os
-import json
 
-from vial_classifier.config import THRESHOLD, ARTIFACT_DIR, DRIFT_BASELINE_STATS_PATH
+from vial_classifier.config import ARTIFACT_DIR, DRIFT_BASELINE_STATS_PATH, THRESHOLD
 from vial_classifier.utils import get_device
 
 

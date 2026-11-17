@@ -12,7 +12,6 @@ from vial_classifier.config import (
     SCHEDULER_PATIENCE,
     THRESHOLD,
 )
-
 from vial_classifier.modeling.model import SimpleCNN
 from vial_classifier.utils import get_device
 

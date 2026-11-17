@@ -8,6 +8,7 @@ import shutil
 import tempfile
 
 import mlflow
+from mlflow.exceptions import MlflowException
 from mlflow.tracking import MlflowClient
 
 from vial_classifier import config
@@ -23,7 +24,7 @@ def resolve_model_uri(client):
         mv = client.get_model_version_by_alias(name=config.MODEL_NAME, alias="Production")
         source = getattr(mv, "source", None) or mv.storage_location
         return source, f"{config.MODEL_NAME} version {mv.version} (Production alias)", mv.version
-    except Exception:
+    except MlflowException:
         pass
 
     try:
@@ -36,7 +37,7 @@ def resolve_model_uri(client):
                 f"{config.MODEL_NAME} version {mv.version} (newest registered; no Production alias)",
                 mv.version,
             )
-    except Exception:
+    except MlflowException:
         pass
 
     runs = mlflow.search_runs(
