@@ -82,19 +82,15 @@ test:
 
 ## Run the FastAPI serving app locally
 serve:
-	uvicorn src.deployment.serve:app --host 0.0.0.0 --port 8000 --reload
+	uvicorn src.deployment.fastapi:app --host 0.0.0.0 --port 8000 --reload
 
 ## Train the model
 train:
-	$(PYTHON_INTERPRETER) src/models/train.py
+	$(PYTHON_INTERPRETER) src/model/main.py
 
 ## Run data preprocessing pipeline
 preprocess:
-	$(PYTHON_INTERPRETER) src/data/preprocess.py
-
-## Export best model artifact
-artifact-export:
-	$(PYTHON_INTERPRETER) src/models/export.py
+	$(PYTHON_INTERPRETER) src/data/preprocessing.py
 
 #################################################################################
 # DOCKER & DAGGER AUTOMATION                                                    #
@@ -107,29 +103,21 @@ PORT = 8000
 ## Build the Docker image locally
 docker-build:
 	docker build -t $(IMAGE_NAME)
-
-## Run the Docker container locally
-docker-run:
-	docker run --rm -d -p $(PORT):$(PORT) --name $(CONTAINER_NAME) $(IMAGE_NAME)
-	@echo "FastAPI container is running at http://localhost:$(PORT)"
-
+	
 ## Stop the running Docker container
 docker-stop:
 	docker stop $(CONTAINER_NAME) || true
 
 ## Run the Dagger pipeline script
 dagger-run:
-	cd go && go run pipeline.go
+	cd dagger && go run pipeline.go
 
 ## Run the testing pipeline
 go-test:
-    cd go && go test -v
-
-## 
-run-dev:
-	APP_ENV=development go run pipeline.go
+	cd dagger && go test -v
 
 ## Production shortcut
+run-prod:
 	APP_ENV=production go run pipeline.go
 	
 #################################################################################
