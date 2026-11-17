@@ -1,3 +1,4 @@
+# Dataset
 from concurrent.futures import ThreadPoolExecutor, as_completed
 import csv
 from pathlib import Path
@@ -33,8 +34,6 @@ from vial_classifier.config import (
     VAL_RATIO,
 )
 
-# Download data
-
 
 def _setup_s3_client():
     """Create a boto3 S3 client configured for Hetzner's public bucket."""
@@ -43,13 +42,13 @@ def _setup_s3_client():
         endpoint_url=S3_ENDPOINT,
         aws_access_key_id='',
         aws_secret_access_key='',
-        config=Config(signature_version=UNSIGNED)
+        config=Config(signature_version=UNSIGNED),
     )
 
 
 
 def _download_file_with_boto3(s3_client, key, output_path):
-    """Download a file from S3, retrying if the download fails."""
+    """Download one image from S3, retrying if the request fails."""
     output_path = Path(output_path)
 
     if output_path.exists():
@@ -59,32 +58,13 @@ def _download_file_with_boto3(s3_client, key, output_path):
         try:
             s3_client.download_file(S3_BUCKET, key, str(output_path))
             return True
-        except Exception as e:
+        except Exception as error:
             if attempt < 2:
                 print(f"Download failed for {key}, retrying...")
                 time.sleep(2)
             else:
-                print(f"Failed to download {key} after 3 attempts: {e}")
+                print(f"Failed to download {key} after 3 attempts: {error}")
                 return False
-
-
-
-def _get_s3_key_from_url(url):
-    # URL format: https://itudsip.hel1.your-objectstorage.com/data/images/metadata.csv
-    # Bucket: data, Key: images/metadata.csv
-    return url.replace(f"{S3_ENDPOINT}/{S3_BUCKET}/", "")
-
-
-def download_with_dvc(url, out_path):
-    """Download a single file (DVC-compatible interface)."""
-    s3_client = _setup_s3_client()
-    out_path = Path(out_path)
-    if out_path.exists():
-        print(f"File {out_path} already exists, skipping download")
-        return
-    key = _get_s3_key_from_url(url)
-    s3_client.download_file(S3_BUCKET, key, str(out_path))
-    print(f"Downloaded {url} to {out_path}")
 
 
 def download_files_from_metadata(metadata_path, output_dir, prefix=""):
@@ -107,10 +87,7 @@ def download_files_from_metadata(metadata_path, output_dir, prefix=""):
             key = f"{prefix}{filename}"
             output_path = Path(output_dir) / filename
             future = executor.submit(
-                _download_file_with_boto3,
-                s3_client,
-                key,
-                output_path
+                _download_file_with_boto3, s3_client, key, output_path
             )
             futures[future] = (key, output_path)
 
@@ -129,22 +106,12 @@ def download_files_from_metadata(metadata_path, output_dir, prefix=""):
         f"skipped {skipped_count} existing, failed {failed_count}"
     )
     if failed_count > 0:
-        raise RuntimeError(
-             f"Failed to download {failed_count} images"
-    )
+        raise RuntimeError(f"Failed to download {failed_count} images")
 
 
 def pull_data_from_dvc():
-    """Pull metadata with DVC, then download its images from the object store."""
-    for metadata_file in (
-        "data/images/metadata.csv.dvc",
-        "data/test/metadata.csv.dvc",
-    ):
-        subprocess.run(
-            ["dvc", "update", metadata_file],
-            cwd=PROJ_ROOT,
-            check=True,
-        )
+    """Pull the tracked metadata, then download the referenced images."""
+    subprocess.run(["dvc", "pull"], cwd=PROJ_ROOT, check=True)
 
     download_files_from_metadata(
         METADATA_PATH,
@@ -157,9 +124,6 @@ def pull_data_from_dvc():
         "test/"
     )
 
-
-
-# Load image dataset
 
 
 def load_image_dataset():
@@ -194,8 +158,6 @@ def load_image_dataset():
 
 
 
-# Image transformations
-
 def define_transforms():
     print("Defining image transforms...")
 
@@ -226,14 +188,6 @@ def define_transforms():
     return train_transforms, val_transforms
 
 
-# Keep this call here because the original notebook created the
-# transforms immediately after defining the function.
-train_transforms, val_transforms = define_transforms()
-
-
-
-# PyTorch dataset
-
 
 class GlassVialDataset(Dataset):
     """Loads vial images and their labels and applies the transform."""
@@ -251,8 +205,8 @@ class GlassVialDataset(Dataset):
         label = self.labels[idx]
 
         with Image.open(image_path) as img:
-            if img.mode != 'RGB':
-                img = img.convert('RGB')
+            if img.mode != "RGB":
+                img = img.convert("RGB")
             image = img.copy()
 
         if self.transform:
@@ -261,8 +215,6 @@ class GlassVialDataset(Dataset):
         return image, label
 
 
-
-# Split dataset
 
 def split_dataset(
     image_dataset,
@@ -339,9 +291,6 @@ def split_dataset(
 
 
 
-# Create DataLoaders
-
-
 def create_dataloaders(
     train_dataset,
     val_dataset,
@@ -359,6 +308,8 @@ def create_dataloaders(
     test_paths, test_labels = (
         zip(*test_dataset) if test_dataset else ([], [])
     )
+
+    train_transforms, val_transforms = define_transforms()
 
     train_data = GlassVialDataset(
         list(train_paths),
@@ -406,5 +357,4 @@ def create_dataloaders(
 
     return train_loader, val_loader, test_loader
 
-if __name__ == "__main__":
-    pull_data_from_dvc()
+
