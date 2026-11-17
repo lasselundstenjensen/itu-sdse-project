@@ -1,0 +1,2 @@
+[console_scripts]
+vial-classifier = vial_classifier.__main__:main
