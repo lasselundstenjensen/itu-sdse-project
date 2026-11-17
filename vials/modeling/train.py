@@ -329,10 +329,13 @@ def main():
 
     # Tune threshold on validation set
     optimal_threshold = tune_threshold(cnn_model, val_loader, device=device)
-
     # Evaluate on test set with optimal threshold
     test_results = evaluate_cnn_model(cnn_model, test_loader, device=device, threshold=optimal_threshold)
 
+    mlflow.log_metric("optimal_threshold", optimal_threshold)
+    mlflow.log_metric("test_results", test_results)
+
+    # Drift monitoring
     baseline_stats = compute_baseline_statistics(cnn_model, val_loader, threshold=optimal_threshold)
 
     with open(DRIFT_BASELINE_STATS_PATH, 'w') as f:
