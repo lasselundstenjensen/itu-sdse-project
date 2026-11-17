@@ -1,7 +1,0 @@
-mlflow==3.18.0
-cloudpickle==3.1.2
-colorama==0.4.6
-numpy==2.5.4
-pydot==4.0.1
-torchvision==0.29.2
-tqdm==4.70.1
