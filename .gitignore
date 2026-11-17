@@ -21,3 +21,12 @@ models/
 
 #key
 .env
+
+# macOS junk files
+.DS_Store
+
+# Python packaging / build artifacts
+*.egg-info/
+build/
+dist/
+__pycache__/
