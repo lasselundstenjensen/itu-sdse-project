@@ -1,73 +1,91 @@
-# Azure Container Apps spec: the equivalent of the DigitalOcean App Platform
-# "app spec". It runs the model-serving Docker image from ghcr.io. Your
-# pipeline builds and pushes the image; Azure only pulls and runs it.
-#
-# One-time setup: make the GHCR package public (Package settings -> Change
-# visibility) so Azure can pull it without credentials. If you keep it private,
-# add a `registries` entry plus a secret (see the note below the spec).
-#
-# Placeholders to fill in from your pipeline / Azure setup:
-#   __OWNER__            GitHub user or org, lowercased (ghcr.io/__OWNER__/model-serve)
-#   __TAG__              exact image tag your pipeline pushed (e.g. commit SHA)
-#   __SUBSCRIPTION_ID__  your Azure subscription ID
-#   __RESOURCE_GROUP__   resource group holding the Container Apps environment
-#   __ENVIRONMENT__      name of the Container Apps environment
-#
-# Deploy with:
-#   az containerapp create -g __RESOURCE_GROUP__ --yaml azure-app.yml
-#   (use `az containerapp update ... --yaml` for later changes)
-
+# The name of the app on DigitalOcean (appears in the deployed URL) and the
+# data-center region it runs in.
 name: mlops-itu-jtk
-type: Microsoft.App/containerApps
-# Frankfurt equivalent of fra1. Must match the environment's region.
-location: Germany West Central
+region: fra1
 
-properties:
-  managedEnvironmentId: /subscriptions/__SUBSCRIPTION_ID__/resourceGroups/__RESOURCE_GROUP__/providers/Microsoft.App/managedEnvironments/__ENVIRONMENT__
+# This file is an "app spec": a recipe that tells DigitalOcean's App Platform
+# (a service that runs Docker containers for you) what to run. It deploys the
+# model-serving Docker image from the GitHub Container Registry (ghcr.io - the
+# place GitHub hosts Docker images). Your pipeline builds and pushes that
+# image; App Platform only downloads and runs it, it never looks at your git
+# repository. That is why the model never enters git.
+#
+# One-time setup: GHCR packages are free while public. After your pipeline
+# pushes the image for the first time, open the package on GitHub
+# (Package settings -> Change visibility) and make it public, so App Platform
+# can pull it without a login. Be aware: public means anyone can download your
+# model image.
+#
+# There is no MLflow tracking server in production. The best model is picked
+# during training in CI; the serving container does not need MLflow at all -
+# it just answers prediction requests and writes its inference log to a file
+# inside the container that is thrown away on every redeploy.
+#
+# The two placeholders below are the parts YOU must fill in from your
+# pipeline before handing this spec to DigitalOcean:
+#   __OWNER__  your GitHub username or organization, lowercased, e.g. the
+#              "my-team" in ghcr.io/my-team/model-serve
+#   __TAG__    the exact image tag your pipeline pushed to ghcr.io, e.g. the
+#              commit SHA you built the image from
+# If these do not match the image you actually pushed, the deploy fails with
+# a "pull image" error.
+# The ingress rules route traffic from the public URL to your container.
+# Each rule says: requests whose path starts with this prefix go to that
+# service, with preserve_path_prefix keeping the full path intact.
+# (Without preserve_path_prefix the prefix would be stripped before
+# forwarding, so /invocations would arrive at the server as "/" and 404.)
+# These prefixes must match the endpoints your serving code actually
+# serves (/invocations, /infer, /health, /drift); the service names must
+# match the service name below.
+ingress:
+  rules:
+    - component:
+        name: model-serve
+        preserve_path_prefix: true
+      match:
+        path:
+          prefix: /invocations
+    - component:
+        name: model-serve
+        preserve_path_prefix: true
+      match:
+        path:
+          prefix: /infer
+    - component:
+        name: model-serve
+        preserve_path_prefix: true
+      match:
+        path:
+          prefix: /health
+    - component:
+        name: model-serve
+        preserve_path_prefix: true
+      match:
+        path:
+          prefix: /drift
 
-  configuration:
-    # There is no per-path ingress routing to configure: a Container App has a
-    # single ingress that sends ALL paths (/invocations, /infer, /health,
-    # /drift) to the container with the path intact, so the DO ingress rules
-    # are no longer needed.
-    ingress:
-      external: true        # public URL
-      targetPort: 5001      # must match the port uvicorn listens on
-      transport: auto
-      allowInsecure: false  # redirect HTTP -> HTTPS
+services:
+  # One service: the model-serving container. "model-serve" here is the name
+  # the ingress rules above point at - change it in both places or not at all.
+  - name: model-serve
+    image:
+      # Where to download the image from. "repository" must be the full
+      # ghcr.io path you pushed to (owner/image), with __OWNER__ filled in.
+      registry_type: GHCR
+      registry: ghcr.io
+      repository: __OWNER__/model-serve
+      # Must be the exact tag your pipeline pushed (see __TAG__ above).
+      tag: __TAG__
+    # The size of the virtual machine running the container.
+    instance_size_slug: apps-s-1vcpu-1gb-fixed
+    # Must match the port your serving server listens on (uvicorn on 5001).
+    http_port: 5001
+    health_check:
+      # App Platform repeatedly requests this path and restarts the app if it
+      # fails. It must be an endpoint the server actually serves (/health).
+      http_path: /health
+      # Wait this long after startup before checking (model loading is slow).
+      initial_delay_seconds: 90
+      period_seconds: 10
+      timeout_seconds: 10
 
-  template:
-    containers:
-      - name: model-serve
-        image: ghcr.io/__OWNER__/model-serve:__TAG__
-        resources:
-          # Consumption plan only allows fixed CPU/memory pairs; 1 vCPU
-          # pairs with 2Gi. For 1Gi of RAM use cpu: 0.5 instead.
-          cpu: 1.0
-          memory: 2Gi
-        probes:
-          # Model loading is slow, so a startup probe holds off the other
-          # probes until /health first succeeds (~30s + 10 x 10s = up to 130s).
-          - type: Startup
-            httpGet:
-              path: /health
-              port: 5001
-            initialDelaySeconds: 30
-            periodSeconds: 10
-            timeoutSeconds: 10
-            failureThreshold: 10
-          # Restart the container if /health starts failing later on.
-          - type: Liveness
-            httpGet:
-              path: /health
-              port: 5001
-            periodSeconds: 10
-            timeoutSeconds: 10
-            failureThreshold: 3
-
-    scale:
-      # Keep one replica always running so you don't pay a slow cold start
-      # (model reload) after scaling to zero. Inference log files live in the
-      # container and are lost on every redeploy, same as before.
-      minReplicas: 1
-      maxReplicas: 1

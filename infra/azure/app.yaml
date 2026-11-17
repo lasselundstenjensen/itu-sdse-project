@@ -1,0 +1,73 @@
+# Azure Container Apps spec: the equivalent of the DigitalOcean App Platform
+# "app spec". It runs the model-serving Docker image from ghcr.io. Your
+# pipeline builds and pushes the image; Azure only pulls and runs it.
+#
+# One-time setup: make the GHCR package public (Package settings -> Change
+# visibility) so Azure can pull it without credentials. If you keep it private,
+# add a `registries` entry plus a secret (see the note below the spec).
+#
+# Placeholders to fill in from your pipeline / Azure setup:
+#   __OWNER__            GitHub user or org, lowercased (ghcr.io/__OWNER__/model-serve)
+#   __TAG__              exact image tag your pipeline pushed (e.g. commit SHA)
+#   __SUBSCRIPTION_ID__  your Azure subscription ID
+#   __RESOURCE_GROUP__   resource group holding the Container Apps environment
+#   __ENVIRONMENT__      name of the Container Apps environment
+#
+# Deploy with:
+#   az containerapp create -g __RESOURCE_GROUP__ --yaml azure-app.yml
+#   (use `az containerapp update ... --yaml` for later changes)
+
+name: mlops-itu-jtk
+type: Microsoft.App/containerApps
+# Frankfurt equivalent of fra1. Must match the environment's region.
+location: Norway East
+
+properties:
+  managedEnvironmentId: /subscriptions/__SUBSCRIPTION_ID__/resourceGroups/__RESOURCE_GROUP__/providers/Microsoft.App/managedEnvironments/__ENVIRONMENT__
+
+  configuration:
+    # There is no per-path ingress routing to configure: a Container App has a
+    # single ingress that sends ALL paths (/invocations, /infer, /health,
+    # /drift) to the container with the path intact, so the DO ingress rules
+    # are no longer needed.
+    ingress:
+      external: true        # public URL
+      targetPort: 5001      # must match the port uvicorn listens on
+      transport: auto
+      allowInsecure: false  # redirect HTTP -> HTTPS
+
+  template:
+    containers:
+      - name: model-serve
+        image: ghcr.io/__OWNER__/model-serve:__TAG__
+        resources:
+          # Consumption plan only allows fixed CPU/memory pairs; 1 vCPU
+          # pairs with 2Gi. For 1Gi of RAM use cpu: 0.5 instead.
+          cpu: 1.0
+          memory: 2Gi
+        probes:
+          # Model loading is slow, so a startup probe holds off the other
+          # probes until /health first succeeds (~30s + 10 x 10s = up to 130s).
+          - type: Startup
+            httpGet:
+              path: /health
+              port: 5001
+            initialDelaySeconds: 30
+            periodSeconds: 10
+            timeoutSeconds: 10
+            failureThreshold: 10
+          # Restart the container if /health starts failing later on.
+          - type: Liveness
+            httpGet:
+              path: /health
+              port: 5001
+            periodSeconds: 10
+            timeoutSeconds: 10
+            failureThreshold: 3
+
+    scale:
+      # Keep one replica always running so you don't pay a slow cold start
+      # (model reload) after scaling to zero. Inference log files live in the
+      # container and are lost on every redeploy, same as before.
+      minReplicas: 1
+      maxReplicas: 1
