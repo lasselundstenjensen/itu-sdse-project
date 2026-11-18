@@ -1,3 +1,23 @@
-# Add patterns of files dvc should ignore, which could improve
+# Added patterns of files dvc should ignore, which could improve
 # the performance. Learn more at
 # https://dvc.org/doc/user-guide/dvcignore
+
+#Ignore environment and cache
+.venv/
+**/pycache/
+**/.ipynb_checkpoints/   #this is here in case notebooks are run
+
+#Pipeline outputs
+artifacts/
+mlflow-state/
+models/
+
+# Folders with no data in them
+docs/
+infra/
+notebooks/
+
+# Downloaded images (fetched in dataset.py)
+data/images/raw/
+data/test/*               #star needs to be used here because we want to keep 1 file from this folder
+!data/test/metadata.csv   #dont ignore this file from the data/test/ folder
