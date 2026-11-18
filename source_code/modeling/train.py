@@ -1,7 +1,6 @@
 # Imports
 # ----------------
 
-import os
 import time
 import torch
 import json
@@ -765,7 +764,7 @@ def wait_until_ready(model_name, model_version, max_attempts=10):
 
 def main():
     
-    os.makedirs(artifact_dir, exist_ok=True)
+    Path(artifact_dir).mkdir(parents=True, exist_ok=True)
     setup_mlflow_tracking(experiment_name)
     print("MLflow tracking URI:", mlflow.get_tracking_uri())
     
