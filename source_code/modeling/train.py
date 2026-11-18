@@ -11,13 +11,11 @@ import mlflow.pyfunc
 import torch.nn as nn
 import torch.optim as optim
 import numpy as np
-import pandas as pd
 import torchvision.transforms as transforms
 
 from pathlib import Path
 from io import BytesIO
 from PIL import Image
-from torch.utils.data import DataLoader, Dataset
 from datetime import datetime, timezone
 from mlflow.tracking.client import MlflowClient
 from mlflow.entities.model_registry.model_version_status import ModelVersionStatus
@@ -26,8 +24,7 @@ from pprint import pprint
 from source_code.preprocessing import apply_preprocessing
 
 from source_code.helper import (
-    setup_mlflow_tracking,
-    GlassVialDataset
+    setup_mlflow_tracking
 )
 
 from sklearn.metrics import (
@@ -41,9 +38,7 @@ from sklearn.metrics import (
 )
 
 from source_code.config import (
-    mlflow_state_dir,
-    mlflow_tracking_uri,
-    mlflow_artifact_location,
+    artifact_dir,
     experiment_name
 )
 
@@ -63,8 +58,6 @@ from source_code.config import (
 )
 
 from source_code.config import (
-    image_data_dir,
-    metadata_path,
     image_statistics_path,
     drift_baseline_stats_path,
     inference_log_path,
@@ -770,9 +763,9 @@ def wait_until_ready(model_name, model_version, max_attempts=10):
     return False
 
 
-
 def main():
-
+    
+    os.makedirs(artifact_dir, exist_ok=True)
     setup_mlflow_tracking(experiment_name)
     print("MLflow tracking URI:", mlflow.get_tracking_uri())
     
