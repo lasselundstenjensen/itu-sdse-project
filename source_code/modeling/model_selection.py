@@ -11,7 +11,7 @@ from pprint import pprint
 from pathlib import Path
 from datetime import datetime, timezone
 from mlflow.tracking import MlflowClient
-from source_code.config import setup_mlflow_tracking
+from source_code.helper import setup_mlflow_tracking
 
 from source_code.config import (
     experiment_name,
