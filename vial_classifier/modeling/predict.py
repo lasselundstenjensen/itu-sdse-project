@@ -1,3 +1,4 @@
+
 """MLflow pyfunc wrapper for vial image inference and request logging."""
 
 import base64
@@ -52,6 +53,11 @@ class SimpleLoggingWrapper(mlflow.pyfunc.PythonModel):
 
     def load_context(self, context):
         """Load the checkpoint when MLflow restores this pyfunc model."""
+
+        # Reset log path to the current environment (e.g. Docker).
+        self.log_path = Path(INFERENCE_LOG_PATH)
+        self.log_path.parent.mkdir(parents=True, exist_ok=True)
+
         if self.model is None:
             if self.model_path is None or not self.model_path.exists():
                 raise FileNotFoundError("Could not find model file")

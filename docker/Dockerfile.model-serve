@@ -16,6 +16,9 @@ COPY vial_classifier/ ./vial_classifier/
 # Copy the exported model
 COPY models/model/ ./models/model/
 
+# Copy drift detection baseline
+COPY artifacts/drift_baseline_stats.json ./artifacts/drift_baseline_stats.json
+
 # Create directory for inference logs
 RUN mkdir -p artifacts
 
