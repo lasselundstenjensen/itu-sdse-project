@@ -4,8 +4,11 @@ package main
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
+	"os/exec"
+	"strings"
 
 	"dagger.io/dagger"
 )
@@ -37,8 +40,35 @@ func run(ctx context.Context) error {
 		return fmt.Errorf("pipeline failed: %w", err)
 	}
 	fmt.Println("Pipeline finished")
+
+	// Here will be the pipeline part that produces the serving container:
+	// (for now this just prints the image reference under which the image will be published to ghcr.io)
+
+	// get the sha of the current commit
+	sha, err := currentCommitSHA()
+	if err != nil {
+		return fmt.Errorf("pipeline failed: %w", err)
+	}
+	// construct the image reference from the sha
+	imgRef, err := imageRef("Niels04", sha)
+	if err != nil {
+		return fmt.Errorf("pipeline failed: %w", err)
+	}
+	fmt.Println(imgRef) // <- replace this with publishing the container
+
+	// Only publish as "latest" if the current branch is the main branch:
+	if os.Getenv("GITHUB_REF") == "refs/heads/main" {
+		imgRef, err := imageRef("Niels04", "latest")
+		if err != nil {
+			return fmt.Errorf("pipeline failed: %w", err)
+		}
+		fmt.Println(imgRef) // <- replace this with publishing the container
+	}
+
 	return nil
 }
+
+// -------- PIPELINE STEPS
 
 // baseContainer copies the project into a Python container and installs
 // exactly the packages locked in uv.lock.
@@ -64,4 +94,33 @@ func unitTestStage(c *dagger.Container) *dagger.Container {
 // The image download is added when the training script is merged.
 func dataStage(c *dagger.Container) *dagger.Container {
 	return c.WithExec([]string{"uv", "run", "dvc", "pull"})
+}
+
+// ------- UTILITY FUNCTIONS
+
+// imageRef returns the name of our serving image on GHCR.
+func imageRef(owner, sha string) (string, error) {
+	if owner == "" || sha == "" {
+		return "", errors.New("owner and sha must not be empty")
+	}
+	// GHCR only accepts lowercase names, so "Niels04" becomes "niels04".
+	return "ghcr.io/" + strings.ToLower(owner) + "/itu-sdse-project:" + sha, nil
+
+}
+
+func currentCommitSHA() (string, error) {
+	if sha := strings.TrimSpace(os.Getenv("GITHUB_SHA")); sha != "" {
+		return sha, nil
+	}
+
+	output, err := exec.Command("git", "rev-parse", "HEAD").Output()
+	if err != nil {
+		return "", fmt.Errorf("determine commit SHA: %w", err)
+	}
+
+	sha := strings.TrimSpace(string(output))
+	if sha == "" {
+		return "", fmt.Errorf("commit SHA is empty")
+	}
+	return sha, nil
 }

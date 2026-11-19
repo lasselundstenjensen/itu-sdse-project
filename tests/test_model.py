@@ -29,7 +29,7 @@ def test_json_results():
        
     #---- check if results to compare exist
     model_results_path = ROOT / "artifacts" / "model_results.json"
-    if not model_results_path.exists()
+    if not model_results_path.exists():
         pytest.skip("No results found at \"artifacts/model_results.json\"")
     
     model_results = _load_json(model_results_path)#---- get results from current model
