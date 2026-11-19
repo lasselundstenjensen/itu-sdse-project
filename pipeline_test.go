@@ -1,6 +1,10 @@
 package main
 
-import "testing"
+import (
+	"os"
+	"path/filepath"
+	"testing"
+)
 
 // unit test for the ImageRef function which constructs the reference under which an image will be published from the owner and the commit sha
 func TestImageRef(t *testing.T) {
@@ -27,6 +31,37 @@ func TestImageRef(t *testing.T) {
 			// raise error of the function doesn't return the expected value:
 			if out != tc.want && !tc.wantErr {
 				t.Errorf("expected value: %s, got: %s, for name: '%s'", tc.want, out, tc.name)
+			}
+		})
+	}
+}
+
+// unit test for the checkArtifact function which is supposed to check whether a given directory contains the MLmodel that is necessary for MLflow to load a model
+func TestCheckArtifact(t *testing.T) {
+	complete := t.TempDir() // temp folders get deleted automatically when the test exits
+
+	// write a dummy MLmodel file to the "complete" dir
+	if err := os.WriteFile(filepath.Join(complete, "MLmodel"), []byte("flavors: {}\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	// make an empty temp dir -> function should fail on this!
+	empty := t.TempDir()
+
+	tests := []struct {
+		name    string
+		dir     string
+		wantErr bool
+	}{
+		{"complete model", complete, false},
+		{"no MLmodel file", empty, true},
+		{"folder missing", filepath.Join(empty, "missing"), true},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			err := checkArtifact(tc.dir)
+			if (err != nil) != tc.wantErr {
+				t.Errorf("error = %v, wantErr = %v", err, tc.wantErr)
 			}
 		})
 	}

@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"strings"
 
 	"dagger.io/dagger"
@@ -34,6 +35,15 @@ func run(ctx context.Context) error {
 	base := baseContainer(client)
 	tested := unitTestStage(base)
 	withData := dataStage(tested)
+	//<- training stage goes here
+	//<- model exporting goes here (currently being done in the deployment.ipynb)
+	// check that the model was actually exported to the artifacts directory
+	err = checkArtifact("models/model")
+	if err != nil {
+		return fmt.Errorf("pipeline failed: %w", err)
+	}
+
+	//<- model test stage goes here
 
 	// Nothing runs until a result is requested; Sync runs all stages above.
 	if _, err := withData.Sync(ctx); err != nil {
@@ -108,6 +118,7 @@ func imageRef(owner, sha string) (string, error) {
 
 }
 
+// currentCommitSHA() returns the SHA of the current git commit
 func currentCommitSHA() (string, error) {
 	if sha := strings.TrimSpace(os.Getenv("GITHUB_SHA")); sha != "" {
 		return sha, nil
@@ -123,4 +134,12 @@ func currentCommitSHA() (string, error) {
 		return "", fmt.Errorf("commit SHA is empty")
 	}
 	return sha, nil
+}
+
+// checkArtifact returns an error if dir does not contain an exported MLflow model.
+func checkArtifact(dir string) error {
+	if _, err := os.Stat(filepath.Join(dir, "MLmodel")); err != nil {
+		return fmt.Errorf("no MLflow model in %s: %w", dir, err)
+	}
+	return nil
 }
