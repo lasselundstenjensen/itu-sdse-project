@@ -1,0 +1,14 @@
+
+# Local Python environment and generated files
+.venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.ruff_cache/
+*.egg-info/
+
+# Local secrets
+.env
+
+# Downloaded training images (local data)
+data/images/raw/
