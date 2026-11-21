@@ -6,6 +6,9 @@
 3. Save the three sets as csv files in data/processed/, which is what
    the training step reads.
 
+It also holds the image transforms and the PyTorch Dataset that turn those
+csv files into tensors, so training and serving prepare images the same way.
+
 Run it with:  uv run python -m src.features
 """
 
@@ -14,15 +17,21 @@ from pathlib import Path
 from loguru import logger
 import numpy as np
 import pandas as pd
+from PIL import Image
+from torch.utils.data import Dataset
+from torchvision import transforms
 import typer
 
 from src.config import (
+    IMAGE_SIZE,
     METADATA_PATH,
     PROCESSED_DATA_DIR,
     RANDOM_STATE,
     RAW_IMAGES_DIR,
     TEST_RATIO,
     TRAIN_RATIO,
+    TRANSFORM_MEAN,
+    TRANSFORM_STD,
     VAL_RATIO,
 )
 
@@ -101,6 +110,49 @@ def save_splits(train, val, test, output_dir: Path) -> None:
     for name, data in (("train", train), ("val", val), ("test", test)):
         pd.DataFrame(data, columns=["filename", "label"]).to_csv(output_dir / f"{name}.csv", index=False)
         logger.info(f"{name}: {len(data)} images")
+
+
+def get_transforms():
+    """Image transforms (same as the notebook).
+
+    train: resize + light augmentation (flip, rotation, colour jitter) + normalise.
+    eval:  resize + normalise only. Validation, test AND the API must use this one,
+           otherwise the model sees different inputs in production (training/serving skew).
+    """
+    train_transforms = transforms.Compose([
+        transforms.Resize(IMAGE_SIZE),
+        transforms.RandomHorizontalFlip(p=0.5),
+        transforms.RandomRotation(10),
+        transforms.ColorJitter(brightness=0.2, contrast=0.2, saturation=0.2),
+        transforms.ToTensor(),
+        transforms.Normalize(mean=TRANSFORM_MEAN, std=TRANSFORM_STD),
+    ])
+    eval_transforms = transforms.Compose([
+        transforms.Resize(IMAGE_SIZE),
+        transforms.ToTensor(),
+        transforms.Normalize(mean=TRANSFORM_MEAN, std=TRANSFORM_STD),
+    ])
+    return train_transforms, eval_transforms
+
+
+class GlassVialDataset(Dataset):
+    """Reads one of the split csv files (filename,label) and gives (image tensor, label)."""
+
+    def __init__(self, split_csv: Path, images_dir: Path = RAW_IMAGES_DIR, transform=None):
+        split = pd.read_csv(split_csv)
+        self.image_paths = [images_dir / f for f in split["filename"]]
+        self.labels = split["label"].astype(int).tolist()
+        self.transform = transform
+
+    def __len__(self):
+        return len(self.image_paths)
+
+    def __getitem__(self, idx):
+        with Image.open(self.image_paths[idx]) as img:
+            image = img.convert("RGB")
+        if self.transform:
+            image = self.transform(image)
+        return image, self.labels[idx]
 
 
 @app.command()
