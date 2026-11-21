@@ -1,6 +1,7 @@
 import json
 
 import mlflow
+import mlflow.pyfunc
 import numpy as np
 import torch
 import torch.nn as nn
@@ -36,9 +37,17 @@ from vial_classifier.config import (
     RANDOM_STATE,
     SCHEDULER_PATIENCE,
     THRESHOLD,
+    MODEL_ARTIFACT_PATH,
+    PROJ_ROOT,
 )
 from vial_classifier.dataset import create_dataloaders, load_image_dataset, split_dataset
 from vial_classifier.modeling.model import SimpleCNN
+
+from vial_classifier.modeling.drift_baseline import (
+    compute_baseline_statistics,
+    save_and_log_baseline,
+)
+from vial_classifier.modeling.predict import SimpleLoggingWrapper
 
 app = typer.Typer()
 
@@ -494,6 +503,21 @@ def main(num_epochs: int = NUM_EPOCHS, learning_rate: float = LEARNING_RATE):
         print(f"Model results saved to {MODEL_RESULTS_PATH}")
 
         mlflow.log_param("classification_threshold", optimal_threshold)
+        
+        # Drift baseline on the validation set (compared against live traffic by /drift)
+        baseline_stats = compute_baseline_statistics(
+            cnn_model, val_loader, device=device, threshold=optimal_threshold
+        )
+        save_and_log_baseline(baseline_stats)
+
+        # Log the pyfunc model with the SimpleLoggingWrapper as the model artifact
+        wrapper = SimpleLoggingWrapper(model=cnn_model)
+        mlflow.pyfunc.log_model(
+            MODEL_ARTIFACT_PATH,
+            python_model=wrapper,
+            code_paths=[str(PROJ_ROOT / "vial_classifier")],
+        )
+        print("Logged pyfunc model to the MLflow run")
 
     print("\n" + "=" * 50)
     print("TRAINING JOB COMPLETE")
