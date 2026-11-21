@@ -74,3 +74,35 @@ def test_bad_metadata_is_rejected(tmp_path, metadata, problem):
     (tmp_path / "a.jpg").touch()
     with pytest.raises(ValueError, match=problem):
         validate_metadata(metadata, tmp_path)
+
+
+# ---------------------------------------------------------------- transforms + Dataset
+
+
+def test_eval_transform_gives_a_3x64x64_tensor():
+    from PIL import Image
+
+    from src.features import get_transforms
+
+    _, eval_transforms = get_transforms()
+    image = Image.new("RGB", (1600, 768))  # same size as the real photos
+    assert tuple(eval_transforms(image).shape) == (3, 64, 64)
+
+
+def test_dataset_returns_image_and_label(tmp_path):
+    from PIL import Image
+
+    from src.features import GlassVialDataset, get_transforms
+
+    Image.new("RGB", (1600, 768)).save(tmp_path / "a.jpg")
+    Image.new("L", (1600, 768)).save(tmp_path / "b.jpg")  # greyscale, must become RGB
+    split_csv = tmp_path / "train.csv"
+    pd.DataFrame({"filename": ["a.jpg", "b.jpg"], "label": [0, 1]}).to_csv(split_csv, index=False)
+
+    _, eval_transforms = get_transforms()
+    dataset = GlassVialDataset(split_csv, tmp_path, transform=eval_transforms)
+
+    assert len(dataset) == 2
+    image, label = dataset[1]
+    assert tuple(image.shape) == (3, 64, 64)
+    assert label == 1
