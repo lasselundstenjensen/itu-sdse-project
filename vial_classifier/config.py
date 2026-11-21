@@ -62,3 +62,7 @@ EXPERIMENT_NAME = "vial_image_classification"
 MODEL_NAME = "cnn_model"
 MLFLOW_TRACKING_URI = f"sqlite:///{MLFLOW_STATE_DIR}/mlflow.db"
 MLFLOW_ARTIFACT_LOCATION = str(MLFLOW_STATE_DIR / "artifacts")
+
+# Model registry and export (from the deployment notebook)
+MODEL_ARTIFACT_PATH = "model_pyfunc"
+EXPORT_DIR = MODELS_DIR / "model"
