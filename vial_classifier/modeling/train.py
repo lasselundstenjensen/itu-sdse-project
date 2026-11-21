@@ -49,6 +49,8 @@ from vial_classifier.modeling.drift_baseline import (
 )
 from vial_classifier.modeling.predict import SimpleLoggingWrapper
 
+from vial_classifier.modeling.registry import register_model
+
 app = typer.Typer()
 
 
@@ -520,6 +522,7 @@ def main(num_epochs: int = NUM_EPOCHS, learning_rate: float = LEARNING_RATE):
         print("Logged pyfunc model to the MLflow run")
 
     print("\n" + "=" * 50)
+    model_details = register_model(run.info.run_id)
     print("TRAINING JOB COMPLETE")
     print("=" * 50)
     print("\nSummary:")
@@ -529,6 +532,7 @@ def main(num_epochs: int = NUM_EPOCHS, learning_rate: float = LEARNING_RATE):
     print(f"  Optimal threshold: {optimal_threshold:.4f}")
     print(f"  Test F1-score: {test_results['f1_score']:.4f}")
     print(f"  MLflow run: {run.info.run_id}")
+    print(f"  Registered model: {model_details.name} version {model_details.version} (Staging)")
 
 
 if __name__ == "__main__":
