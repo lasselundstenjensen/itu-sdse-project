@@ -38,6 +38,23 @@ You are given the following material:
   - /invocations that take binary image payload
   - /drift that returns model/data drift information
 
+## Image model
+
+Prepare `data/images/metadata.csv` and the corresponding images under
+`data/images/raw` as in `notebooks/01_training.ipynb`, then train the model with:
+
+```bash
+pip install -r notebooks/requirements.txt
+python -m modeling.train
+```
+
+The script writes `artifacts/vial_cnn_model.pth`, a PyTorch checkpoint containing
+the `SimpleCNN` state dictionary and its architecture, input/output shapes,
+classification threshold, and class count. The linked model-validator action
+expects a separate `model/model.pkl` joblib artifact containing a scikit-learn
+model for 12-column tabular inputs, so it cannot validate this image CNN
+checkpoint.
+
 > **NOTE:**
 > The Dagger workflow can be run locally or inside the GitHub workflow—both are viable options during development.
 >
