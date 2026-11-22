@@ -10,7 +10,8 @@ import os
 
 # READ DATA
 
-PROJECT_ROOT = Path(__file__).resolve().parent.parent
+#PROJECT_ROOT = Path(__file__).resolve().parent.parent
+PROJECT_ROOT = Path(__file__).resolve().parents[2]
 
 metadata_path = "./data/images/metadata.csv"
 test_data_dir = "./data/test"
