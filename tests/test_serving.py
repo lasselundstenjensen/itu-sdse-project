@@ -26,3 +26,10 @@ def test_infer_valid_image():
 def test_infer_invalid_image():
     response = client.post("/infer", json={"image": "not an image!!"})
     assert response.status_code == 400
+
+
+
+def test_invocations_works_like_infer():
+    response = client.post("/invocations", json={"image": "aGVsbG8="})
+    assert response.status_code == 200
+    assert "prediction" in response.json()

@@ -19,6 +19,7 @@ def health():
 def version():
     return {"version": "0.1.0", "model": "dummy"}
 
+@app.post("/invocations")
 
 @app.post("/infer")
 def infer(request: InferRequest):
