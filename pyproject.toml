@@ -1,0 +1,32 @@
+[build-system]
+requires = ["flit_core >=3.2,<4"]
+build-backend = "flit_core.buildapi"
+
+[project]
+name = "src"
+version = "0.1.0"
+description = "Vial image classifier (clean vs defective) - ITU MLOps project, group Yap-IT"
+readme = "README.md"
+requires-python = ">=3.13"
+dependencies = [
+    "boto3",
+    "dvc",
+    "loguru",
+    "mlflow>=3",
+    "numpy",
+    "pandas",
+    "pillow",
+    "python-dotenv",
+    "requests",
+    "scikit-learn",
+    "scipy",
+    "torch",
+    "torchvision",
+    "typer",
+]
+
+[dependency-groups]
+dev = ["pytest"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
