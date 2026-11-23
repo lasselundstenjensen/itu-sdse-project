@@ -51,8 +51,14 @@ func (m *VialPipeline) PythonEnv(
 			"torchvision==" + torchvisionVersion,
 			"--index-url", torchIndexURL,
 		}).
-		WithFile("/src/notebooks/requirements.txt", source.File("notebooks/requirements.txt")).
-		WithExec([]string{"pip", "install", "-r", "/src/notebooks/requirements.txt", "pytest", "fastapi", "uvicorn", "httpx"}).
+		// Dependencies come from pyproject.toml. Only that file is copied at this
+		// point, so code changes don't invalidate the install layer. torch is
+		// already installed above, so the pinned version is kept.
+		WithFile("/src/pyproject.toml", source.File("pyproject.toml")).
+		WithExec([]string{"sh", "-c",
+			`python -c "import tomllib; print('\n'.join(tomllib.load(open('/src/pyproject.toml', 'rb'))['project']['dependencies']))" > /tmp/requirements.txt`,
+		}).
+		WithExec([]string{"pip", "install", "-r", "/tmp/requirements.txt", "pytest", "fastapi", "uvicorn", "httpx"}).
 		WithDirectory("/src", source).
 		WithWorkdir("/src").
 		// The code is split between src/ (package) and the repo root (serving/),
