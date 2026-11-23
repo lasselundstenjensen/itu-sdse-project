@@ -7,7 +7,9 @@ on:
 jobs:
   test:
     name: Run tests with Dagger
-    runs-on: ubuntu-latest
+    # Pinned instead of ubuntu-latest: the course's Dagger v0.19.6 engine
+    # needs a runner image it supports.
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
 
@@ -17,3 +19,9 @@ jobs:
           version: "0.19.6"
           verb: call
           args: test
+
+      - name: Show Dagger engine logs
+        if: failure()
+        run: |
+          docker ps -a
+          docker logs --tail 100 dagger-engine-v0.19.6 || true
