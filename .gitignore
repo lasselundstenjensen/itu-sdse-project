@@ -16,3 +16,5 @@ models/
 # Secrets and OS files
 .env
 .DS_Store
+.pytest_cache/
+data/processed/
