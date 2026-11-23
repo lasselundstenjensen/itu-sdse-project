@@ -1,0 +1,19 @@
+name: CI
+
+on:
+  push:
+  workflow_dispatch:
+
+jobs:
+  test:
+    name: Run tests with Dagger
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: dagger call test
+        uses: dagger/dagger-for-github@v7
+        with:
+          version: "0.19.6"
+          verb: call
+          args: test
