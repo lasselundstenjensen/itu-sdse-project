@@ -1,6 +1,12 @@
-black
-flake8
-isort
-pip
-python-dotenv
--e .
+# Python 3.13
+torch
+torchvision
+mlflow>=2.18
+boto3
+dvc
+numpy
+pandas
+scikit-learn
+scipy
+pillow
+requests
