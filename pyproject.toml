@@ -1,0 +1,33 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "vial-classifier"
+version = "0.1.0"
+description = "Pharmaceutical vial impurity classifier: training, serving and drift detection"
+requires-python = ">=3.13"
+dependencies = [
+    "torch",
+    "torchvision",
+    "mlflow>=2.18",
+    "boto3",
+    "dvc",
+    "numpy",
+    "pandas",
+    "scikit-learn",
+    "scipy",
+    "pillow",
+    "requests",
+    "fastapi",
+    "uvicorn",
+]
+
+[project.optional-dependencies]
+dev = ["pytest"]
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
