@@ -195,24 +195,56 @@ def _predict_probabilities(model, loader, device):
     return np.asarray(probabilities), np.asarray(labels)
 
 
+
 def tune_threshold(model, val_loader, device=None, threshold_range=None):
     """Select the probability cutoff that maximises validation macro-F1."""
+
     device = torch.device(device or next(model.parameters()).device)
+
     probabilities, labels = _predict_probabilities(model, val_loader, device)
+
     if threshold_range is None:
         threshold_range = [
             round(float(value), 3) for value in np.arange(0.025, 0.976, 0.025)
         ]
-    best_threshold, best_score = THRESHOLD, 0.0
-    for candidate in threshold_range:
-        preds = (probabilities >= candidate).astype(int)
+
+    print(f"\n{'='*60}")
+    print("TUNING CLASSIFICATION THRESHOLD")
+    print(f"{'='*60}")
+    print(f"Threshold range: {threshold_range}")
+
+    best_threshold = THRESHOLD
+    best_score = 0.0
+
+    for t in threshold_range:
+        preds = (probabilities >= t).astype(int)
+
         score = f1_score(labels, preds, average="macro")
+        positive_f1 = f1_score(labels, preds, average="binary")
+        accuracy = accuracy_score(labels, preds)
+
+        print(
+            f"  Threshold {t}: "
+            f"MacroF1={score:.4f}, "
+            f"F1(defective)={positive_f1:.4f}, "
+            f"Acc={accuracy:.4f}"
+        )
+
         if score > best_score:
-            best_threshold, best_score = float(candidate), float(score)
+            best_threshold = float(t)
+            best_score = float(score)
+
+    print(
+        f"\nOptimal threshold: {best_threshold} "
+        f"(macro F1-score: {best_score:.4f})"
+    )
+
     if mlflow.active_run():
         mlflow.log_param("optimal_threshold", best_threshold)
         mlflow.log_metric("optimal_threshold_macro_f1", best_score)
+
     return best_threshold
+
 
 
 def evaluate_cnn_model(model, test_loader, device=None, threshold=THRESHOLD):
