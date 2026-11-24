@@ -24,4 +24,4 @@ jobs:
           pip install pytest torch torchvision numpy pandas scikit-learn scipy pillow
 
       - name: Run tests
-        run: pytest || [ $? -eq 5 ]
+        run: pytest || 
