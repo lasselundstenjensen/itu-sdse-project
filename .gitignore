@@ -12,3 +12,12 @@ __pycache__/
 
 # Downloaded training images (local data)
 data/images/raw/
+
+# Generated model artifacts
+artifacts/
+models/
+mlflow-state/
+
+# Downloaded test images
+data/test/*.jpg
+data/test/*.png
