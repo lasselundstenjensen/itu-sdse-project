@@ -48,11 +48,12 @@ func main() {
 // parseStage checks the command-line arguments and returns the stage name.
 func parseStage(args []string) (string, error) {
 	if len(args) < 2 {
-		return "", fmt.Errorf("usage: go run . [test/train]")
+		return "", fmt.Errorf("usage: go run . [test/train/publish]")
 	}
-	if args[1] != "test" && args[1] != "train" {
+	if args[1] != "test" && args[1] != "train" && args[1] != "publish" {
 		return "", fmt.Errorf("unknown stage: %s", args[1])
 	}
+
 	return args[1], nil
 }
 
@@ -126,6 +127,7 @@ func Publish(ctx context.Context, client *dagger.Client, tag string) error {
 		Include: []string{
 			"vial_classifier",
 			"pyproject.toml",
+			"uv.lock",
 			"README.md",
 			"docker",
 			"models/model",
@@ -135,11 +137,11 @@ func Publish(ctx context.Context, client *dagger.Client, tag string) error {
 
 	// runs a docker build on the seleccted files, creates an image
 	image := src.DockerBuild(dagger.DirectoryDockerBuildOpts{
-		Dockerfile: "docker/Dockerfile.serve",
+		Dockerfile: "docker/Dockerfile",
 	})
 
 	_, err := image.
-		WithExec([]string{"python", "-c", "import vial_classifier.serving.app"}).
+		WithExec([]string{"python", "-c", "import vial_classifier.serve"}).
 		Sync(ctx)
 	if err != nil {
 		return err
