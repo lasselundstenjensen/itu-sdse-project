@@ -72,3 +72,8 @@ EXPERIMENT_NAME = "vial_image_classification"
 MODEL_NAME = "cnn_model"
 MLFLOW_TRACKING_URI = f"sqlite:///{MLFLOW_STATE_DIR}/mlflow.db"
 MLFLOW_ARTIFACT_LOCATION = "./mlflow-state/artifacts"
+
+# Serving: the public API port, and the internal MLflow scoring server it forwards to
+API_PORT = 5001
+UPSTREAM_PORT = 5002
+UPSTREAM_HOST = "127.0.0.1"
