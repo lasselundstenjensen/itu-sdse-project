@@ -1,5 +1,6 @@
 # Data
-/data/
+data/images/raw/
+data/test/*.jpg
 
 # Pipeline outputs
 /mlflow-state/

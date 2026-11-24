@@ -14,14 +14,11 @@ func main() {
 
 	// checks if input equals expected ()
 
-	if len(os.Args) < 2 {
-		fmt.Println("usage: go run . [test/train]")
+	stage, err := parseStage(os.Args)
+	if err != nil {
+		fmt.Println("Error:", err)
 		os.Exit(1)
-
 	}
-
-	// save the stage name
-	stage := os.Args[1]
 
 	// opens connection to dagger engine and shows dagger logs in terminal
 	client, err := dagger.Connect(ctx, dagger.WithLogOutput(os.Stderr))
@@ -46,6 +43,17 @@ func main() {
 		os.Exit(1)
 	}
 
+}
+
+// parseStage checks the command-line arguments and returns the stage name.
+func parseStage(args []string) (string, error) {
+	if len(args) < 2 {
+		return "", fmt.Errorf("usage: go run . [test/train]")
+	}
+	if args[1] != "test" && args[1] != "train" {
+		return "", fmt.Errorf("unknown stage: %s", args[1])
+	}
+	return args[1], nil
 }
 
 // take the client and return a container
