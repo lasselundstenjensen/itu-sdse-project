@@ -1,4 +1,7 @@
-from paths import mlflow_state_dir
+import os
+
+os.makedirs("output", exist_ok=True)
+from .paths import mlflow_state_dir
 max_date = "2024-01-31"
 min_date = "2024-01-01"
 # Training configuration

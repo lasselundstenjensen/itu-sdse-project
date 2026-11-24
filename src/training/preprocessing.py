@@ -6,8 +6,8 @@ import json
 from ..config.paths import image_statistics_path
 from ..config.constants import image_size, transform_mean, transform_std, batch_size
 from torch.utils.data import DataLoader, Dataset
-from training_helpers import calculate_image_statistics
-from load_dataset import load_image_dataset
+from .training_helpers import calculate_image_statistics
+from .load_dataset import load_image_dataset
 
 image_dataset = load_image_dataset()
 def define_transforms():

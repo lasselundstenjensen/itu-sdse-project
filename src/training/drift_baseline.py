@@ -8,11 +8,11 @@ import torch
 import numpy as np
 import mlflow
 from ..config.constants import threshold
-from tuning import tune_threshold
+from .tuning import tune_threshold
 import json
 from ..config.paths import drift_baseline_stats_path
-from preprocessing import split_dataset, create_dataloaders, load_image_dataset
-from model_training import SimpleCNN, train_cnn_model
+from .preprocessing import split_dataset, create_dataloaders, load_image_dataset
+from .model_training import SimpleCNN, train_cnn_model
 from ..config.constants import *
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")

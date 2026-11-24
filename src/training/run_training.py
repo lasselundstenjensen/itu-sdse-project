@@ -1,12 +1,15 @@
-from training_helpers import print_section_header
+from .training_helpers import print_section_header
 import torch
 import numpy as np
 import mlflow
-from model_training import SimpleCNN, train_cnn_model
+from .model_training import SimpleCNN, train_cnn_model
 from ..config.constants import *
-from preprocessing import split_dataset, create_dataloaders, load_image_dataset
+from .tuning import tune_threshold
+from .evaluate import evaluate_cnn_model
+from .preprocessing import split_dataset, create_dataloaders, load_image_dataset
+from .read_data import pull_data_from_dvc
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-
+pull_data_from_dvc()
 print_section_header("CNN MODEL TRAINING")
 
 torch.manual_seed(random_state)
@@ -35,16 +38,21 @@ mlflow.log_param("total_parameters", model_params)
 mlflow.log_param("trainable_parameters", trainable_params)
 
 
-if __name__ == "__main__":
-    image_dataset = load_image_dataset()
-    train_dataset, val_dataset, test_dataset = split_dataset(image_dataset)
-    train_loader, val_loader, test_loader = create_dataloaders(train_dataset, val_dataset, test_dataset)
+
+image_dataset = load_image_dataset()
+train_dataset, val_dataset, test_dataset = split_dataset(image_dataset)
+train_loader, val_loader, test_loader = create_dataloaders(train_dataset, val_dataset, test_dataset)
 
 
-    cnn_model, training_history = train_cnn_model(
-        train_loader, val_loader,
-        num_epochs=num_epochs,
-        learning_rate=learning_rate,
-        device=device,
-        random_seed=random_state,
-    )
+cnn_model, training_history = train_cnn_model(
+    train_loader, val_loader,
+    num_epochs=num_epochs,
+    learning_rate=learning_rate,
+    device=device,
+    random_seed=random_state,
+)
+# Tune threshold on validation set
+optimal_threshold = tune_threshold(cnn_model, val_loader, device=device)
+
+# Evaluate on test set with optimal threshold
+test_results = evaluate_cnn_model(cnn_model, test_loader, device=device, threshold=optimal_threshold)
