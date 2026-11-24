@@ -163,3 +163,54 @@ else doctl apps update "$APP_ID" --spec /app.yaml --wait; fi`
 		WithExec([]string{"sh", "-c", script}).
 		Stdout(ctx)
 }
+
+// Test runs the linter and the unit tests inside the project environment.
+// Used by the CI workflow on every push and pull request.
+func (m *Pipeline) Test(
+	ctx context.Context,
+	// +defaultPath="/"
+	// +ignore=[".git", ".venv", "**/__pycache__", "dagger", "artifacts", "mlflow-state", "models"]
+	source *dagger.Directory,
+) (string, error) {
+	return m.Env(source).
+		WithExec([]string{"ruff", "check", "."}).
+		WithExec([]string{"pytest", "-q"}).
+		Stdout(ctx)
+}
+
+// DeployAzure points the existing Azure Container App at a new image
+// (ghcr.io/<owner>/model-serve:<tag>) and returns the app's hostname.
+// Use the same owner and tag as Publish. Logs in with a service principal.
+func (m *Pipeline) DeployAzure(
+	ctx context.Context,
+	owner string,
+	tag string,
+	clientId string,
+	clientSecret *dagger.Secret,
+	tenantId string,
+	// +default="mlops-itu-rg"
+	resourceGroup string,
+	// +default="mlops-itu-jtk"
+	appName string,
+) (string, error) {
+	image := fmt.Sprintf("ghcr.io/%s/model-serve:%s", strings.ToLower(owner), tag)
+
+	script := `set -e
+az login --service-principal -u "$AZ_CLIENT_ID" -p "$AZ_CLIENT_SECRET" --tenant "$AZ_TENANT_ID" --output none
+az extension add --name containerapp --upgrade --only-show-errors
+az containerapp update --name "$APP" --resource-group "$RG" --image "$IMAGE" \
+  --query properties.configuration.ingress.fqdn -o tsv`
+
+	return dag.Container().
+		From("mcr.microsoft.com/azure-cli:latest").
+		WithEnvVariable("AZ_CLIENT_ID", clientId).
+		WithSecretVariable("AZ_CLIENT_SECRET", clientSecret).
+		WithEnvVariable("AZ_TENANT_ID", tenantId).
+		WithEnvVariable("RG", resourceGroup).
+		WithEnvVariable("APP", appName).
+		WithEnvVariable("IMAGE", image).
+		// Dagger caches results; this forces the deploy to run every time
+		WithEnvVariable("CACHE_BUSTER", time.Now().String()).
+		WithExec([]string{"bash", "-c", script}).
+		Stdout(ctx)
+}

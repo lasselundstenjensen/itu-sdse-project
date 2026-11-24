@@ -1,0 +1,64 @@
+name: CI/CD
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Dagger
+        # Optionally pin to the engineVersion in dagger.json: add DAGGER_VERSION=0.x.y before BIN_DIR
+        run: curl -fsSL https://dl.dagger.io/dagger/install.sh | BIN_DIR=/usr/local/bin sudo -E sh
+
+      - name: Lint and unit tests
+        run: dagger call test
+
+  deploy:
+    needs: test
+    # Only deploy from main, never from pull requests
+    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write   # lets GITHUB_TOKEN push to ghcr.io
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Dagger
+        run: curl -fsSL https://dl.dagger.io/dagger/install.sh | BIN_DIR=/usr/local/bin sudo -E sh
+
+      - name: Train, build and push serving image
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          dagger call publish \
+            --owner "${{ github.repository_owner }}" \
+            --tag "${{ github.sha }}" \
+            --gh-user "${{ github.actor }}" \
+            --gh-token env:GITHUB_TOKEN
+
+      - name: Deploy to Azure Container Apps
+        id: deploy
+        env:
+          AZURE_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
+        run: |
+          FQDN=$(dagger call deploy-azure \
+            --owner "${{ github.repository_owner }}" \
+            --tag "${{ github.sha }}" \
+            --client-id "${{ secrets.AZURE_CLIENT_ID }}" \
+            --client-secret env:AZURE_CLIENT_SECRET \
+            --tenant-id "${{ secrets.AZURE_TENANT_ID }}")
+          echo "Deployed to https://$FQDN"
+          echo "fqdn=$FQDN" >> "$GITHUB_OUTPUT"
+
+      - name: Smoke test /health
+        # Retries cover the cold start while the model loads
+        run: |
+          curl -fsS --retry 20 --retry-delay 15 --retry-all-errors \
+            "https://${{ steps.deploy.outputs.fqdn }}/health"
