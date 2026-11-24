@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"strings"
 
 	"dagger.io/dagger"
 )
@@ -34,6 +35,8 @@ func main() {
 		err = Test(ctx, client)
 	case "train":
 		err = Train(ctx, client)
+	case "publish":
+		err = Publish(ctx, client, os.Getenv("IMAGE_TAG"))
 	default:
 		err = fmt.Errorf("unknown stage")
 	}
@@ -104,4 +107,44 @@ func Train(ctx context.Context, client *dagger.Client) error {
 
 	_, err = trained.Directory("mlflow-state").Export(ctx, stateDir)
 	return err
+}
+
+// Builds the serving image from the trained model and pushes it to GHCR.
+func Publish(ctx context.Context, client *dagger.Client, tag string) error {
+	owner := strings.ToLower(os.Getenv("GITHUB_REPOSITORY_OWNER"))
+	token := client.SetSecret("ghcr-token", os.Getenv("GITHUB_TOKEN"))
+
+	src := client.Host().Directory("..", dagger.HostDirectoryOpts{
+		Include: []string{
+			"vial_classifier",
+			"pyproject.toml",
+			"README.md",
+			"docker",
+			"models/model",
+			"artifacts/drift_baseline_stats.json",
+		},
+	})
+
+	// runs a docker build on the seleccted files, creates an image
+	image := src.DockerBuild(dagger.DirectoryDockerBuildOpts{
+		Dockerfile: "docker/Dockerfile.serve",
+	})
+
+	_, err := image.
+		WithExec([]string{"python", "-c", "import vial_classifier.serving.app"}).
+		Sync(ctx)
+	if err != nil {
+		return err
+	}
+
+	address := "ghcr.io/" + owner + "/model-serve:" + tag
+	published, err := image.
+		WithRegistryAuth("ghcr.io", owner, token).
+		Publish(ctx, address)
+	if err != nil {
+		return err
+	}
+
+	fmt.Println("Published", published)
+	return nil
 }
