@@ -17,4 +17,5 @@ fastapi
 uvicorn
 requests
 scipy
+pytest
 -e .
