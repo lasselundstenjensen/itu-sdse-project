@@ -1,8 +1,8 @@
 import torch
 from torch import nn
 
-from modeling.model import SimpleCNN
-from modeling.train import load_checkpoint, save_checkpoint
+from ccds.modeling.model import SimpleCNN
+from ccds.modeling.train import load_checkpoint, save_checkpoint
 
 
 class NotebookSimpleCNN(nn.Module):

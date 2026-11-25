@@ -4,7 +4,7 @@ import numpy as np
 import pytest
 from scipy.stats import ks_2samp
 
-from monitoring.drift import detect_drift
+from ccds.monitoring.drift import detect_drift
 
 
 def test_empty_drift_response_has_notebook_keys():

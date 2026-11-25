@@ -17,3 +17,5 @@
 .env
 .env.*
 
+# python cache
+__pycache__/
