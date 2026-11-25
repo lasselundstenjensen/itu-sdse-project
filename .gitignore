@@ -2,6 +2,11 @@
 # local data
 /data/images/raw/
 
+# image files under data/ are managed by DVC and must never be committed
+/data/**/*.jpg
+/data/**/*.jpeg
+/data/**/*.png
+
 
 #future mlflow stuff
 /artifacts/
