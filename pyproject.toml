@@ -1,0 +1,42 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "vial-classifier"
+version = "0.1.0"
+description = "Binary classifier for defective glass vials, with training, serving and drift detection."
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+    # Model and images
+    "torch",
+    "torchvision",
+    "pillow",
+    "numpy",
+    "pandas",
+    "scikit-learn",
+    "scipy",
+    # Experiment tracking and model registry
+    "mlflow>=2.18",
+    # Data download and versioning
+    "boto3",
+    "dvc",
+    # Serving
+    "fastapi",
+    "uvicorn",
+    "requests",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest",
+    "httpx",  # needed by FastAPI's TestClient for serving tests
+]
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]
