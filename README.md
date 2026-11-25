@@ -45,7 +45,13 @@ Prepare `data/images/metadata.csv` and the corresponding images under
 
 ```bash
 pip install -r notebooks/requirements.txt
-python -m modeling.train
+PYTHONPATH=src python -m ccds.modeling.train
+```
+
+PowerShell alternative:
+
+```powershell
+$env:PYTHONPATH = "src"; python -m ccds.modeling.train
 ```
 
 The script writes `artifacts/vial_cnn_model.pth`, a PyTorch checkpoint containing
