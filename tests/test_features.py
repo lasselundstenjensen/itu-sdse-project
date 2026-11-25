@@ -1,5 +1,6 @@
 from PIL import Image
-from vial_classifier.features import define_transforms, GlassVialDataset
+from vial_classifier.features import define_transforms
+from vial_classifier.data import GlassVialDataset
 
 def test_val_transform_output_shape():
     _, val_tf = define_transforms()
