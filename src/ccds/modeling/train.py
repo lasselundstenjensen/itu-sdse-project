@@ -14,7 +14,7 @@ from PIL import Image
 from sklearn.metrics import f1_score
 from torch.utils.data import DataLoader, Dataset
 
-from modeling.model import SimpleCNN
+from ccds.modeling.model import SimpleCNN
 
 
 class TrainingHistory(TypedDict):
