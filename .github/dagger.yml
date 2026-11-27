@@ -1,0 +1,52 @@
+name: Run Dagger pipeline
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:   # run manually from the Actions tab
+
+# GITHUB_TOKEN needs permission to push the image to GHCR (Packages)
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  dagger:
+    name: Train and publish from dagger pipeline
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v7
+
+      - name: Set up Go
+        uses: actions/setup-go@v7
+        with:
+          go-version-file: dagger/go.mod
+          cache: false
+
+
+      # stage 1: train the model
+      # writes models/model and artifacts/ onto the runner
+      - name: Dagger train
+        uses: dagger/dagger-for-github@v8.4.1
+        with:
+          workdir: dagger
+          verb: run
+          args: go run . train
+          version: "0.21.11"
+
+      # stage 2: build the serving image from those files and push it to GHCR
+      # GITHUB_REPOSITORY_OWNER is set by GitHub automatically
+      - name: Dagger publish
+        uses: dagger/dagger-for-github@v8.4.1
+        # GITHUB_TOKEN and IMAGE_TAG must be set explicitly
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          IMAGE_TAG: ${{ github.sha }}
+        with:
+          workdir: dagger
+          verb: run
+          args: go run . publish
+          version: "0.21.11"
