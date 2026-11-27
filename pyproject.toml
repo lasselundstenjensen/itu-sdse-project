@@ -5,14 +5,14 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "vial-classifier"
 version = "0.1.0"
-description = "Binary classifier for defective glass vials, with training, serving and drift detection."
-readme = "README.md"
-requires-python = ">=3.11"
+description = "Pharmaceutical vial impurity classifier: training, serving and drift detection"
+requires-python = ">=3.13"
 dependencies = [
-    # Model and images
     "torch",
     "torchvision",
-    "pillow",
+    "mlflow>=2.18",
+    "boto3",
+    "dvc",
     "numpy",
     "pandas",
     "scikit-learn",
